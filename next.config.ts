@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Weather artwork is inline SVG now, so no remote image hosts are needed.
 };
 
 export default nextConfig;
