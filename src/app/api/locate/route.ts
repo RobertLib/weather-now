@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getCountry, nearestPlace } from "@/lib/places";
+import { getCountry, nearestPlace, placeLabels } from "@/lib/places";
 import { placePath } from "@/lib/routes";
 import { isLocale } from "@/i18n/config";
 
@@ -27,8 +27,8 @@ export function GET(request: NextRequest) {
   }
 
   const near = nearestPlace(lat, lon, 30);
-  if (near) {
-    const country = getCountry(near.place.cc)!;
+  const country = near && getCountry(near.place.cc);
+  if (near && country) {
     return Response.json(
       {
         found: true,
@@ -37,6 +37,8 @@ export function GET(request: NextRequest) {
         lat: near.place.lat,
         lon: near.place.lon,
         path: placePath(locale, country, near.place),
+        // Both languages, so the remembered place follows a language switch.
+        i18n: placeLabels(near.place, country),
       },
       { headers }
     );

@@ -21,23 +21,56 @@ export interface PollutantReading {
   value: number;
   /** Share of the EEA "very poor" threshold, 0-1, for the mini bars. */
   ratio: number;
+  /**
+   * The pollutant's own EAQI band (0 good … 5 extremely poor), or null for
+   * carbon monoxide, which the European index doesn't cover.
+   */
+  level: number | null;
 }
 
-const ROWS: Array<[keyof Pollutants, string, number]> = [
-  ["pm2_5", "PM2.5", 75],
-  ["pm10", "PM10", 150],
-  ["o3", "O₃", 380],
-  ["no2", "NO₂", 340],
-  ["so2", "SO₂", 750],
-  ["co", "CO", 15000],
+/**
+ * Upper limits (µg/m³) of the good, fair, moderate, poor and very poor bands of
+ * the European AQI sub-indices, as used by Open-Meteo's `european_aqi`. The
+ * index itself uses 24-hour means for particulates, so a level derived from
+ * the current hourly value is an approximation.
+ */
+const BANDS: Record<Exclude<keyof Pollutants, "co">, [number, number, number, number, number]> = {
+  pm2_5: [10, 20, 25, 50, 75],
+  pm10: [20, 40, 50, 100, 150],
+  no2: [40, 90, 120, 230, 340],
+  o3: [50, 100, 130, 240, 380],
+  so2: [100, 200, 350, 500, 750],
+};
+
+const ROWS: Array<[keyof Pollutants, string]> = [
+  ["pm2_5", "PM2.5"],
+  ["pm10", "PM10"],
+  ["o3", "O₃"],
+  ["no2", "NO₂"],
+  ["so2", "SO₂"],
+  ["co", "CO"],
 ];
 
+/** Bar scale for CO, which has no EAQI band. */
+const CO_CEILING = 15000;
+
+export function pollutantLevel(key: keyof Pollutants, value: number): number | null {
+  if (key === "co") return null;
+  const index = BANDS[key].findIndex((upper) => value <= upper);
+  return index < 0 ? 5 : index;
+}
+
 export function pollutantReadings(p: Pollutants): PollutantReading[] {
-  return ROWS.flatMap(([key, label, ceiling]) => {
+  return ROWS.flatMap(([key, label]) => {
     const value = p[key];
-    return value === null ? [] : [{ key, label, value, ratio: Math.min(1, value / ceiling) }];
+    if (value === null) return [];
+    const ceiling = key === "co" ? CO_CEILING : BANDS[key][4];
+    return [{ key, label, value, ratio: Math.min(1, value / ceiling), level: pollutantLevel(key, value) }];
   });
 }
+
+/** Neutral colour for readings without a band. */
+export const UNRATED_COLOR = "#94a3b8";
 
 /** Grains/m³ where each pollen type turns low → moderate → high → very high. */
 const POLLEN_STEPS: Record<PollenType, [number, number, number]> = {

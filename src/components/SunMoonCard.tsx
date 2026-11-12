@@ -9,8 +9,9 @@ import { useI18n } from "@/i18n/client";
 import Card from "./Card";
 
 interface SunMoonCardProps {
-  sunrise: number;
-  sunset: number;
+  /** Null during polar day or night. */
+  sunrise: number | null;
+  sunset: number | null;
   /** Unix seconds used for the moon phase. */
   time: number;
   tz: string;
@@ -44,20 +45,26 @@ export default function SunMoonCard({
         <Slot
           icon={<Sunrise className="h-4 w-4 text-amber-500" aria-hidden="true" />}
           label={t.common.sunrise}
-          value={formatTime(sunrise, tz, locale)}
+          value={sunrise === null ? "—" : formatTime(sunrise, tz, locale)}
         />
         <Slot
           icon={<Sunset className="h-4 w-4 text-orange-500" aria-hidden="true" />}
           label={t.common.sunset}
-          value={formatTime(sunset, tz, locale)}
+          value={sunset === null ? "—" : formatTime(sunset, tz, locale)}
         />
       </div>
 
       <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-        {t.sun.next(daylight.nextEvent)}{" "}
-        <span className="font-semibold text-slate-700 dark:text-slate-200">
-          {formatDuration(daylight.minutesToNextEvent)}
-        </span>
+        {daylight.polar !== null || daylight.nextEvent === null || daylight.minutesToNextEvent === null ? (
+          t.sun.polar[daylight.polar ?? "night"]
+        ) : (
+          <>
+            {t.sun.next(daylight.nextEvent)}{" "}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {formatDuration(daylight.minutesToNextEvent)}
+            </span>
+          </>
+        )}
       </p>
 
       <div className="mt-4 flex items-center gap-3 border-t border-slate-900/8 pt-4 dark:border-white/10">

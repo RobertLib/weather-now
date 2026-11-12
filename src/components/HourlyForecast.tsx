@@ -26,7 +26,7 @@ export default function HourlyForecast({ items, tz, units, theme, now }: HourlyF
     now > 0 && items.length > 0 && now / 1000 - items[0].time < 3600 && now / 1000 >= items[0].time;
 
   return (
-    <div className="scroll-strip -mx-4 flex gap-2.5 px-4 pb-2 sm:-mx-6 sm:gap-3 sm:px-6">
+    <div className="scroll-strip -mx-4 flex scroll-px-4 gap-2.5 px-4 pb-2 sm:-mx-6 sm:scroll-px-6 sm:gap-3 sm:px-6">
       {items.map((item, index) => {
         const sameDay = dayKey(item.time, tz) === todayKey;
         return (

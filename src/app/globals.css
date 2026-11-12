@@ -216,7 +216,11 @@
   border-color: color-mix(in srgb, white 10%, transparent);
 }
 
-/* Horizontal scrollers: snap, momentum, hidden scrollbar. */
+/*
+ * Horizontal scrollers: snap, momentum, hidden scrollbar. Strips that bleed
+ * into the page gutter (`-mx-* px-*`) need a matching `scroll-px-*`, or the
+ * browser snaps the first item flush against the screen edge.
+ */
 @utility scroll-strip {
   overflow-x: auto;
   scroll-snap-type: x proximity;

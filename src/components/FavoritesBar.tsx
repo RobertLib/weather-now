@@ -7,6 +7,7 @@ import { SavedCity } from "@/types/weather";
 import { formatTemp } from "@/lib/units";
 import { Snapshot, fetchSnapshots } from "@/lib/openmeteo";
 import { homePath } from "@/lib/routes";
+import { localizePlace } from "@/lib/places-client";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useUnits } from "@/hooks/useUnits";
 import { useI18n } from "@/i18n/client";
@@ -75,8 +76,10 @@ export default function FavoritesBar({ activeId }: { activeId?: string | null })
         <Star className="h-3 w-3" aria-hidden="true" />
         {t.favorites.heading}
       </p>
-      <ul className="scroll-strip -mx-4 flex gap-2 px-4 pb-1 sm:-mx-1 sm:px-1">
-        {cities.map((city) => {
+      <ul className="scroll-strip -mx-4 flex scroll-px-4 gap-2 px-4 pb-1 sm:-mx-1 sm:scroll-px-1 sm:px-1">
+        {cities.map((stored) => {
+          // Saved in either language; show it in the current one.
+          const city = localizePlace(stored, locale);
           const preview = previews[city.id];
           const active = city.id === activeId;
 

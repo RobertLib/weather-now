@@ -3,14 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Locale } from "@/i18n/config";
 import { Dictionary, describe, getDictionary } from "@/i18n";
-import type { DayBrief, OverviewProse } from "@/i18n/en";
-import { Country, Place, getPlaceBySlug } from "@/lib/places";
+import type { DayBrief, OverviewProse, RangeProse, SunLine } from "@/i18n/en";
+import { Country, Place, getPlaceBySlug, placeLabels } from "@/lib/places";
 import { CityView, parseCityView, placePath } from "@/lib/routes";
 import { pageMetadata } from "@/lib/seo";
 import { climateDatasetSchema, placePageSchema } from "@/lib/schema";
 import { getAirQuality, getForecast, renderTime } from "@/lib/server-data";
 import { slimForecast, upcomingDays, upcomingHours } from "@/lib/openmeteo";
-import { overviewFacts } from "@/lib/facts";
+import { overviewFacts, weekFacts } from "@/lib/facts";
 import { DEFAULT_THEME, conditionKind, skyTheme } from "@/lib/conditions";
 import {
   CLIMATE_PERIOD,
@@ -22,7 +22,7 @@ import {
   verdict,
   wearTier,
 } from "@/lib/climate";
-import { AQI_COLORS, POLLEN_COLORS, aqiLevel, pollenLevel, pollutantReadings } from "@/lib/air";
+import { AQI_COLORS, POLLEN_COLORS, UNRATED_COLOR, aqiLevel, pollenLevel, pollutantReadings } from "@/lib/air";
 import { midMonthDaylight, moonPhase, nextMoonEvents, localNoonUtc, sunTimes } from "@/lib/astro";
 import { compassIndex } from "@/lib/units";
 import { UV_COLORS, uvLevel } from "@/lib/meteo";
@@ -103,9 +103,17 @@ function brief(t: Dictionary, locale: Locale, tz: string, d: DailyPoint): DayBri
   };
 }
 
+/** Sunrise/sunset as text, or the polar day/night replacing them. */
+function sunLine(day: DailyPoint, tz: string, locale: Locale): SunLine {
+  return day.sunrise !== null && day.sunset !== null
+    ? { rise: formatTime(day.sunrise, tz, locale), set: formatTime(day.sunset, tz, locale) }
+    : { polar: day.daylight > 0 ? "day" : "night" };
+}
+
 function overviewProse(t: Dictionary, locale: Locale, name: string, forecast: Forecast): OverviewProse {
   const tz = forecast.timezone;
   const facts = overviewFacts(forecast);
+  const sun = facts.today ? sunLine(facts.today, tz, locale) : null;
   return {
     name,
     temp: facts.now.temp,
@@ -131,8 +139,29 @@ function overviewProse(t: Dictionary, locale: Locale, name: string, forecast: Fo
           warmestHi: facts.week.warmest.tempMax,
         }
       : null,
-    sunrise: facts.today ? formatTime(facts.today.sunrise, tz, locale) : null,
-    sunset: facts.today ? formatTime(facts.today.sunset, tz, locale) : null,
+    sunrise: sun && "rise" in sun ? sun.rise : null,
+    sunset: sun && "set" in sun ? sun.set : null,
+    polar: sun && "polar" in sun ? sun.polar : null,
+  };
+}
+
+/** Facts and sentence input for the 14-day outlook, or null with too few days. */
+function rangeProse(locale: Locale, name: string, tz: string, days: DailyPoint[]): RangeProse | null {
+  const week = weekFacts(days);
+  if (!week) return null;
+  return {
+    name,
+    days: week.days,
+    hiMin: week.hiMin,
+    hiMax: week.hiMax,
+    warmestLabel: dayLabel(week.warmest.time, tz, locale),
+    warmestHi: week.warmest.tempMax,
+    coldestLabel: dayLabel(week.coldest.time, tz, locale),
+    coldestLo: week.coldest.tempMin,
+    wettestLabel: dayLabel(week.wettest.time, tz, locale),
+    wettestPrecip: week.wettest.precipitation,
+    wetDays: week.wetDays,
+    trend: week.trend,
   };
 }
 
@@ -187,41 +216,53 @@ function monthProseInput(name: string, months: MonthNormals[], m: number, place:
 
 /* ------------------------------------------------------------ metadata */
 
-export async function cityMetadata(locale: Locale, params: CityParams): Promise<Metadata> {
-  const r = resolve(locale, params);
-  if (!r) return {};
+/**
+ * Title and meta description of a city page. Shared by the metadata and the
+ * page's WebPage markup so both describe the page the same way.
+ */
+function cityTexts(
+  locale: Locale,
+  r: Resolved,
+  forecast: Forecast | null
+): { title: string; description: string } {
   const t = getDictionary(locale);
   const name = r.place[locale];
   const cname = r.country[locale];
-  let title: string;
-  let description: string;
 
   switch (r.view) {
-    case "overview": {
-      title = t.city.meta.overview(name, cname);
-      const forecast = await getForecast(r.place.lat, r.place.lon);
-      description = forecast
-        ? t.city.desc.overview(
-            name,
-            `${Math.round(forecast.current.temp)} °C, ${describe(t, forecast.current.code).toLowerCase()}`
-          )
-        : t.city.desc.overviewNoData(name);
-      break;
-    }
+    case "overview":
+      return {
+        title: t.city.meta.overview(name, cname),
+        description: forecast
+          ? t.city.desc.overview(
+              name,
+              `${Math.round(forecast.current.temp)} °C, ${describe(t, forecast.current.code).toLowerCase()}`
+            )
+          : t.city.desc.overviewNoData(name),
+      };
     case "climate":
       if (r.month !== undefined) {
         const m = r.climate![r.month];
-        title = t.city.meta.month(name, cname, r.month);
-        description = t.city.desc.month(name, r.month, m.hi, m.lo, m.p);
-      } else {
-        title = t.city.meta.climate(name, cname);
-        description = t.city.desc.climate(name, climateProseInput(name, r.climate!));
+        return {
+          title: t.city.meta.month(name, cname, r.month),
+          description: t.city.desc.month(name, r.month, m.hi, m.lo, m.p),
+        };
       }
-      break;
+      return {
+        title: t.city.meta.climate(name, cname),
+        description: t.city.desc.climate(name, climateProseInput(name, r.climate!)),
+      };
     default:
-      title = t.city.meta[r.view](name, cname);
-      description = t.city.desc[r.view](name);
+      return { title: t.city.meta[r.view](name, cname), description: t.city.desc[r.view](name) };
   }
+}
+
+export async function cityMetadata(locale: Locale, params: CityParams): Promise<Metadata> {
+  const r = resolve(locale, params);
+  if (!r) return {};
+  // Only the overview description quotes live data; the fetch is shared with the page.
+  const forecast = r.view === "overview" ? await getForecast(r.place.lat, r.place.lon) : null;
+  const { title, description } = cityTexts(locale, r, forecast);
 
   return pageMetadata({
     locale,
@@ -262,7 +303,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   const pageSchema = placePageSchema({
     title: month !== undefined ? t.city.h1.month(name, month) : t.city.h1[view](name),
-    description: t.meta.description,
+    description: cityTexts(locale, r, forecast).description,
     path: placePath(locale, country, place, view, month),
     language: locale,
     place: {
@@ -293,6 +334,8 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
     lat: place.lat,
     lon: place.lon,
     path: placePath(locale, country, place),
+    // Remembered places and favourites keep both languages.
+    i18n: placeLabels(place, country),
   };
 
   /* ---- overview ---- */
@@ -303,6 +346,8 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
         {...frame}
         h1={t.city.h1.overview(name)}
         lead={prose ? t.prose.overview(prose) : t.city.dataUnavailable}
+        // The live dashboard paints the sky from the current conditions.
+        theme={null}
       >
         <JsonLd data={pageSchema} />
         <WeatherDashboard place={placeRef} initialForecast={forecast && slimForecast(forecast)} initialAir={air} />
@@ -322,11 +367,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
       <CityFrame
         {...frame}
         h1={t.city.h1.tomorrow(name)}
-        lead={
-          day
-            ? t.prose.tomorrow(name, brief(t, locale, tz, day), formatTime(day.sunrise, tz, locale), formatTime(day.sunset, tz, locale))
-            : t.city.dataUnavailable
-        }
+        lead={day ? t.prose.tomorrow(name, brief(t, locale, tz, day), sunLine(day, tz, locale)) : t.city.dataUnavailable}
         theme={themeOf(forecast)}
       >
         <JsonLd data={pageSchema} />
@@ -343,8 +384,8 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
                   { label: t.common.gusts, value: day.gustMax === null ? "—" : <Speed ms={day.gustMax} /> },
                   { label: t.daily.uvMax, value: day.uvMax === null ? "—" : Math.round(day.uvMax) },
                   { label: t.common.daylight, value: formatDuration(day.daylight / 60) },
-                  { label: t.common.sunrise, value: formatTime(day.sunrise, tz, locale) },
-                  { label: t.common.sunset, value: formatTime(day.sunset, tz, locale) },
+                  { label: t.common.sunrise, value: day.sunrise === null ? "—" : formatTime(day.sunrise, tz, locale) },
+                  { label: t.common.sunset, value: day.sunset === null ? "—" : formatTime(day.sunset, tz, locale) },
                 ]}
               />
             </Section>
@@ -397,32 +438,14 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
   if (view === "14-day") {
     const tz = forecast?.timezone ?? place.tz;
     const days = forecast ? upcomingDays(forecast).slice(0, 14) : [];
-    const facts = days.length >= 3 ? overviewFacts(forecast!).week : null;
-    let lead = t.city.dataUnavailable;
-    if (days.length >= 3) {
-      const by = (pick: (d: DailyPoint) => number, dir: 1 | -1) =>
-        days.reduce((best, d) => (pick(d) * dir > pick(best) * dir ? d : best));
-      const warmest = by((d) => d.tempMax, 1);
-      const coldest = by((d) => d.tempMin, -1);
-      const wettest = by((d) => d.precipitation, 1);
-      const avg = (list: DailyPoint[]) => list.reduce((s, d) => s + d.tempMax, 0) / list.length;
-      lead = t.prose.range({
-        name,
-        days: days.length,
-        hiMin: Math.min(...days.map((d) => d.tempMax)),
-        hiMax: Math.max(...days.map((d) => d.tempMax)),
-        warmestLabel: dayLabel(warmest.time, tz, locale),
-        warmestHi: warmest.tempMax,
-        coldestLabel: dayLabel(coldest.time, tz, locale),
-        coldestLo: coldest.tempMin,
-        wettestLabel: dayLabel(wettest.time, tz, locale),
-        wettestPrecip: wettest.precipitation,
-        wetDays: days.filter((d) => d.precipitation >= 1).length,
-        trend: avg(days.slice(-3)) - avg(days.slice(0, 3)),
-      });
-    }
+    const range = rangeProse(locale, name, tz, days);
     return (
-      <CityFrame {...frame} h1={t.city.h1["14-day"](name)} lead={lead} theme={themeOf(forecast)}>
+      <CityFrame
+        {...frame}
+        h1={t.city.h1["14-day"](name)}
+        lead={range ? t.prose.range(range) : t.city.dataUnavailable}
+        theme={themeOf(forecast)}
+      >
         <JsonLd data={pageSchema} />
         {days.length > 0 && (
           <Section title={t.views.dailyTable}>
@@ -430,9 +453,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
             <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t.prose.rangeNote}</p>
           </Section>
         )}
-        {facts && forecast && (
-          <Faq title={t.city.faqTitle} items={t.faq.overview(overviewProse(t, locale, name, forecast)).slice(2)} />
-        )}
+        {range && <Faq title={t.city.faqTitle} items={t.faq.range(range)} />}
       </CityFrame>
     );
   }
@@ -503,8 +524,18 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
                         <td className={tdClass}>{p.label}</td>
                         <td className={tdClass}>{p.value < 10 ? p.value.toFixed(1) : Math.round(p.value)} µg/m³</td>
                         <td className={tdClass}>
-                          <span className="block h-1.5 w-32 overflow-hidden rounded-full bg-slate-900/10 dark:bg-white/10">
-                            <span className="block h-full rounded-full" style={{ width: `${Math.max(4, p.ratio * 100)}%`, backgroundColor: AQI_COLORS[level] }} />
+                          <span className="flex items-center gap-2.5">
+                            <span className="block h-1.5 w-32 shrink-0 overflow-hidden rounded-full bg-slate-900/10 dark:bg-white/10">
+                              <span
+                                className="block h-full rounded-full"
+                                style={{
+                                  width: `${Math.max(4, p.ratio * 100)}%`,
+                                  backgroundColor: p.level === null ? UNRATED_COLOR : AQI_COLORS[p.level],
+                                }}
+                              />
+                            </span>
+                            {/* CO isn't part of the European index, so it gets no band. */}
+                            <span className="text-xs">{p.level === null ? "—" : t.air.levels[p.level]}</span>
                           </span>
                         </td>
                       </tr>

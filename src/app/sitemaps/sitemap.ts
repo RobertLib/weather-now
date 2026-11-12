@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
-import { LOCALES, Locale } from "@/i18n/config";
-import { COUNTRIES, PLACES, getCountry } from "@/lib/places";
+import { DEFAULT_LOCALE, LOCALES, Locale } from "@/i18n/config";
+import { COUNTRIES, PLACES, getCountry, isCountryHubIndexed } from "@/lib/places";
 import { getClimate } from "@/lib/climate";
 import {
   CITY_VIEWS,
@@ -37,7 +37,11 @@ function entry(
   return {
     url: absoluteUrl(paths[locale]),
     alternates: {
-      languages: Object.fromEntries(LOCALES.map((l) => [l, absoluteUrl(paths[l])])),
+      // Same set as the pages' own hreflang tags, x-default included.
+      languages: {
+        ...Object.fromEntries(LOCALES.map((l) => [l, absoluteUrl(paths[l])])),
+        "x-default": absoluteUrl(paths[DEFAULT_LOCALE]),
+      },
     },
     ...extra,
   };
@@ -50,7 +54,10 @@ export default async function sitemap(props: { id: Promise<string> }): Promise<M
     const pages: Array<Record<Locale, string>> = [
       { en: homePath("en"), cs: homePath("cs") },
       { en: worldPath("en"), cs: worldPath("cs") },
-      ...COUNTRIES.map((c) => ({ en: countryPath("en", c), cs: countryPath("cs", c) })),
+      ...COUNTRIES.filter((c) => isCountryHubIndexed(c.cc)).map((c) => ({
+        en: countryPath("en", c),
+        cs: countryPath("cs", c),
+      })),
       ...(["widget", "about", "privacy", "terms"] as const).map((p) => ({
         en: pagePath("en", p),
         cs: pagePath("cs", p),

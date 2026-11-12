@@ -54,9 +54,10 @@ export interface DailyPoint {
   gustMax: number | null;
   windDir: number;
   uvMax: number | null;
-  sunrise: number;
-  sunset: number;
-  /** Seconds. */
+  /** Unix seconds; null during polar day or polar night (see `daylight`). */
+  sunrise: number | null;
+  sunset: number | null;
+  /** Seconds; 0 during polar night, 86 400 during polar day. */
   daylight: number;
   /** Seconds. */
   sunshine: number | null;
@@ -118,6 +119,14 @@ export interface GeoLocation {
   admin1?: string;
 }
 
+/**
+ * Labels of a curated place in every language. Stored places carry them so a
+ * place saved on the Czech site still reads (and links) in English, and back.
+ */
+export type PlaceLabels = Partial<
+  Record<"en" | "cs", { name: string; countryName?: string; path: string }>
+>;
+
 /** A place the dashboard can show — curated or ad hoc. */
 export interface PlaceRef {
   name: string;
@@ -127,6 +136,7 @@ export interface PlaceRef {
   lon: number;
   /** Canonical page for curated places. */
   path?: string;
+  i18n?: PlaceLabels;
 }
 
 /** A city the user pinned for one-tap access. */
@@ -137,4 +147,5 @@ export interface SavedCity {
   lat: number;
   lon: number;
   path?: string;
+  i18n?: PlaceLabels;
 }

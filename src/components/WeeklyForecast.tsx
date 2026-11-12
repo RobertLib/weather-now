@@ -13,6 +13,7 @@ import {
   speedUnit,
 } from "@/lib/units";
 import { dayKey, formatDayMonth, formatDuration, formatHour, formatTime, formatWeekday } from "@/lib/datetime";
+import { isThreeHourSlot } from "@/lib/openmeteo";
 import { useI18n } from "@/i18n/client";
 import { describe } from "@/i18n";
 import WeatherIcon from "./WeatherIcon";
@@ -42,7 +43,7 @@ export default function WeeklyForecast({ days, hourly, tz, units, theme }: Weekl
         const condition = describe(t, day.code);
         const pop = day.pop ?? 0;
         const hours = isOpen
-          ? hourly.filter((h) => dayKey(h.time, tz) === day.date && h.time % 10800 === 0)
+          ? hourly.filter((h) => dayKey(h.time, tz) === day.date && isThreeHourSlot(h.time, tz))
           : [];
 
         return (
@@ -138,8 +139,14 @@ export default function WeeklyForecast({ days, hourly, tz, units, theme }: Weekl
                     value={day.uvMax === null ? "—" : String(Math.round(day.uvMax))}
                     icon={<Sun className="h-3.5 w-3.5" aria-hidden="true" />}
                   />
-                  <MiniStat label={t.common.sunrise} value={formatTime(day.sunrise, tz, locale)} />
-                  <MiniStat label={t.common.sunset} value={formatTime(day.sunset, tz, locale)} />
+                  <MiniStat
+                    label={t.common.sunrise}
+                    value={day.sunrise === null ? "—" : formatTime(day.sunrise, tz, locale)}
+                  />
+                  <MiniStat
+                    label={t.common.sunset}
+                    value={day.sunset === null ? "—" : formatTime(day.sunset, tz, locale)}
+                  />
                   <MiniStat label={t.common.daylight} value={formatDuration(day.daylight / 60)} />
                   {day.sunshine !== null && (
                     <MiniStat label={t.common.sunshine} value={formatDuration(day.sunshine / 60)} />

@@ -2,7 +2,14 @@
 
 import { Flower2, Leaf } from "lucide-react";
 import { AirQuality, PollenType } from "@/types/weather";
-import { AQI_COLORS, POLLEN_COLORS, aqiLevel, pollenLevel, pollutantReadings } from "@/lib/air";
+import {
+  AQI_COLORS,
+  POLLEN_COLORS,
+  UNRATED_COLOR,
+  aqiLevel,
+  pollenLevel,
+  pollutantReadings,
+} from "@/lib/air";
 import { useI18n } from "@/i18n/client";
 import { BarGauge } from "./Gauges";
 import Card from "./Card";
@@ -77,7 +84,11 @@ export default function AirQualityCard({ air, delay = 0 }: AirQualityCardProps) 
                   <span className="ml-0.5 text-[0.6rem] font-normal text-slate-400">µg/m³</span>
                 </dd>
               </div>
-              <BarGauge ratio={reading.ratio} color={color} className="mt-1" />
+              <BarGauge
+                ratio={reading.ratio}
+                color={reading.level === null ? UNRATED_COLOR : AQI_COLORS[reading.level]}
+                className="mt-1"
+              />
             </div>
           ))}
         </dl>

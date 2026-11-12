@@ -20,6 +20,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assignCountrySlugs, assignPlaceSlugs, slugify } from "./lib/slugs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE_DIR = path.resolve(
@@ -417,26 +418,6 @@ const geocode = (name, language) =>
     `${GEOCODE}?name=${encodeURIComponent(name)}&count=10&language=${language}&format=json`
   ).then((data) => data.results ?? []);
 
-const SPECIAL_LETTERS = {
-  ł: "l", Ł: "L", đ: "d", Đ: "D", ø: "o", Ø: "O", æ: "ae", Æ: "AE", œ: "oe",
-  Œ: "OE", ß: "ss", þ: "th", Þ: "TH", ð: "d", Ð: "D", ı: "i", ħ: "h", Ħ: "H",
-};
-
-/** Lowercase ASCII with accents stripped. */
-function fold(value) {
-  return value
-    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦ]/g, (ch) => SPECIAL_LETTERS[ch])
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function slugify(value) {
-  return fold(value)
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 const sameName = (a, b) => slugify(a) === slugify(b);
 
 function distanceKm(lat1, lon1, lat2, lon2) {
@@ -637,8 +618,24 @@ async function resolve(entry) {
 /* Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/** Slugs of the current dataset, which are published URLs and must survive a rebuild. */
+async function readPublishedSlugs() {
+  const read = async (file, fallback) => {
+    const full = path.join(OUT_DIR, file);
+    return existsSync(full) ? JSON.parse(await readFile(full, "utf8")) : fallback;
+  };
+  const places = await read("places.json", []);
+  const countries = await read("countries.json", {});
+  return {
+    places: new Map(places.map((p) => [p.id, p.slug])),
+    countries: new Map(Object.entries(countries).map(([cc, c]) => [cc, c.slug])),
+  };
+}
+
 async function main() {
   console.log(`cache: ${CACHE_DIR}`);
+  const previous = await readPublishedSlugs();
+  console.log(`published: ${previous.places.size} place slugs, ${previous.countries.size} country slugs`);
   const curated = await readCuratedCities();
   const curatedKeys = new Set(curated.map((e) => `${e.cc}:${slugify(e.en)}`));
 
@@ -679,32 +676,9 @@ async function main() {
     if (!usedA1Fixes.has(key)) console.warn(`  ! unused admin1 fix ${key}`);
   }
 
-  // Slugs, unique per country and locale.
-  for (const locale of ["en", "cs"]) {
-    const groups = new Map();
-    for (const place of places) {
-      place.slug ??= {};
-      place.slug[locale] = slugify(place[locale]);
-      const key = `${place.cc}/${place.slug[locale]}`;
-      groups.set(key, [...(groups.get(key) ?? []), place]);
-    }
-    for (const [key, group] of groups) {
-      if (group.length < 2) continue;
-      for (const place of group) {
-        const region = place.a1?.[locale] ?? place.a1?.en;
-        place.slug[locale] = region
-          ? `${place.slug[locale]}-${slugify(region)}`
-          : `${place.slug[locale]}-${Math.abs(place.id)}`;
-      }
-      note(`slug collision ${locale}:${key} → ${group.map((p) => p.slug[locale]).join(", ")}`);
-    }
-    const seen = new Set();
-    for (const place of places) {
-      const key = `${place.cc}/${place.slug[locale]}`;
-      if (seen.has(key)) throw new Error(`Slug still not unique after suffixing: ${locale}:${key}`);
-      seen.add(key);
-    }
-  }
+  // Slugs, unique per country and locale. Published slugs are kept (see
+  // scripts/lib/slugs.mjs); only new places get fresh ones.
+  for (const message of assignPlaceSlugs(places, previous.places)) note(message);
 
   const output = places
     .map((p) => {
@@ -739,8 +713,11 @@ async function main() {
     if (/[()&]|SAR| - | – /.test(`${en}|${cs}`)) {
       console.warn(`  ! odd country name for ${cc}: "${en}" / "${cs}" – add a fix`);
     }
-    countries[cc] = { en, cs, slug: { en: slugify(en), cs: slugify(cs) }, continent };
+    countries[cc] = { en, cs, slug: {}, continent };
   }
+  // Country names come from ICU and can change with the Node version; the
+  // published slugs must not.
+  for (const message of assignCountrySlugs(countries, previous.countries)) note(message);
 
   await mkdir(OUT_DIR, { recursive: true });
   await writeFile(

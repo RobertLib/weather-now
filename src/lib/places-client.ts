@@ -1,4 +1,18 @@
 import { Locale } from "@/i18n/config";
+import type { PlaceLabels } from "@/types/weather";
+import { worldPath } from "@/lib/routes";
+
+/**
+ * A stored place (last viewed, favourite) in the current language. Places
+ * saved before labels were stored keep whatever language they were saved in.
+ */
+export function localizePlace<T extends { name: string; countryName?: string; path?: string; i18n?: PlaceLabels }>(
+  place: T,
+  locale: Locale
+): T {
+  const labels = place.i18n?.[locale];
+  return labels ? { ...place, ...labels } : place;
+}
 
 /**
  * Slim copy of the curated place index for the browser, served as a static
@@ -41,8 +55,7 @@ export function indexCountryName(index: PlaceIndex, cc: string, locale: Locale):
 
 export function indexPlacePath(index: PlaceIndex, p: IndexPlace, locale: Locale): string {
   const country = index.countries[p[1]];
-  const prefix = locale === "en" ? "/weather" : "/cs/pocasi";
-  return `${prefix}/${country[2 + L(locale)]}/${p[4 + L(locale)] as string}`;
+  return `${worldPath(locale)}/${country[2 + L(locale)]}/${p[4 + L(locale)] as string}`;
 }
 
 function normalize(value: string): string {

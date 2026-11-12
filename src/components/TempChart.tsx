@@ -55,7 +55,7 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
   const step = innerW / (points.length - 1);
 
   return (
-    <div className="scroll-strip -mx-1 px-1">
+    <div className="scroll-strip -mx-1 scroll-px-1 px-1">
       <div style={{ minWidth: 600 }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}

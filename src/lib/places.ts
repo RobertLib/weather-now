@@ -1,10 +1,14 @@
 import placesData from "@/data/places.json";
 import countriesData from "@/data/countries.json";
-import { Locale } from "@/i18n/config";
+import { LOCALES, Locale } from "@/i18n/config";
+import { POPULAR } from "@/lib/popular";
+import { placePath } from "@/lib/routes";
+import type { PlaceLabels } from "@/types/weather";
 
 /**
  * The curated place index: every city that gets its own indexable pages.
- * Server-side only — the browser uses the slimmer `places-index.ts`.
+ * Server-side only — the browser fetches a slimmer copy from `/api/places`
+ * (see `places-client.ts`).
  */
 
 export interface Place {
@@ -64,6 +68,14 @@ export function placesIn(cc: string): Place[] {
   return PLACES_BY_CC.get(cc) ?? [];
 }
 
+/**
+ * Whether a country hub is worth indexing. A hub with a single city only
+ * repeats that city's page, so it stays `noindex, follow` and out of the sitemap.
+ */
+export function isCountryHubIndexed(cc: string): boolean {
+  return placesIn(cc).length >= 2;
+}
+
 export function getPlaceBySlug(
   locale: Locale,
   countrySlug: string,
@@ -73,6 +85,13 @@ export function getPlaceBySlug(
   if (!country) return null;
   const place = placesIn(country.cc).find((p) => p.slug[locale] === placeSlug);
   return place ? { place, country } : null;
+}
+
+/** Name, country and canonical path of a curated place in every language. */
+export function placeLabels(place: Place, country: Country): PlaceLabels {
+  return Object.fromEntries(
+    LOCALES.map((l) => [l, { name: place[l], countryName: country[l], path: placePath(l, country, place) }])
+  );
 }
 
 /** Great-circle distance in km. */
@@ -114,41 +133,7 @@ export function nearestPlace(
   return best;
 }
 
-/**
- * Hand-picked for the homepage and footer: the most searched destinations
- * for each audience. Unknown entries are skipped silently.
- */
-const POPULAR: Record<Locale, Array<[string, string]>> = {
-  en: [
-    ["GB", "london"],
-    ["US", "new-york"],
-    ["FR", "paris"],
-    ["JP", "tokyo"],
-    ["AE", "dubai"],
-    ["ES", "barcelona"],
-    ["IT", "rome"],
-    ["AU", "sydney"],
-    ["US", "los-angeles"],
-    ["DE", "berlin"],
-    ["SG", "singapore"],
-    ["CZ", "prague"],
-  ],
-  cs: [
-    ["CZ", "prague"],
-    ["CZ", "brno"],
-    ["CZ", "ostrava"],
-    ["CZ", "plzen"],
-    ["CZ", "liberec"],
-    ["CZ", "olomouc"],
-    ["CZ", "ceske-budejovice"],
-    ["CZ", "hradec-kralove"],
-    ["SK", "bratislava"],
-    ["AT", "vienna"],
-    ["HR", "split"],
-    ["GB", "london"],
-  ],
-};
-
+/** The curated popular destinations (see `lib/popular.ts`); unknown entries are skipped. */
 export function popularPlaces(locale: Locale): Place[] {
   return POPULAR[locale].flatMap(([cc, slug]) => {
     const place = placesIn(cc).find((p) => p.slug.en === slug);

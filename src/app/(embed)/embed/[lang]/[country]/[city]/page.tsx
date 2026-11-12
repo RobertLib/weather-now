@@ -4,7 +4,7 @@ import { isLocale } from "@/i18n/config";
 import { describe, getDictionary } from "@/i18n";
 import { I18nProvider } from "@/i18n/client";
 import { getPlaceBySlug } from "@/lib/places";
-import { placePath } from "@/lib/routes";
+import { absoluteUrl, placePath } from "@/lib/routes";
 import { getForecast } from "@/lib/server-data";
 import { upcomingDays } from "@/lib/openmeteo";
 import { formatWeekday } from "@/lib/datetime";
@@ -36,11 +36,11 @@ export default async function EmbedPage({ params }: { params: Params }) {
   const t = getDictionary(lang);
   const forecast = await getForecast(place.lat, place.lon);
   const days = forecast ? upcomingDays(forecast).slice(0, 4) : [];
-  const href = `https://www.weather-now.app${placePath(lang, country, place)}`;
+  const href = absoluteUrl(placePath(lang, country, place));
 
   return (
     <I18nProvider locale={lang}>
-      <div lang={lang} className="h-[260px] overflow-hidden rounded-2xl bg-linear-to-br from-sky-600 to-blue-800 p-4 text-white dark:from-slate-800 dark:to-slate-950">
+      <div className="h-65 overflow-hidden rounded-2xl bg-linear-to-br from-sky-600 to-blue-800 p-4 text-white dark:from-slate-800 dark:to-slate-950">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-base font-bold">{place[lang]}</p>

@@ -15,6 +15,7 @@ import {
   matchPlaces,
 } from "@/lib/places-client";
 import { resolvePlaceHref } from "@/lib/navigation-client";
+import { POPULAR } from "@/lib/popular";
 import { useI18n } from "@/i18n/client";
 
 /** One row in the dropdown: a curated city (with its page) or a geocoder hit. */
@@ -28,11 +29,8 @@ interface Suggestion {
   geo?: GeoLocation;
 }
 
-/** [country code, English slug] */
-const POPULAR: Record<"en" | "cs", Array<[string, string]>> = {
-  en: [["GB", "london"], ["US", "new-york"], ["FR", "paris"], ["JP", "tokyo"], ["AE", "dubai"], ["ES", "barcelona"]],
-  cs: [["CZ", "prague"], ["CZ", "brno"], ["CZ", "ostrava"], ["CZ", "plzen"], ["AT", "vienna"], ["HR", "split"]],
-};
+/** How many popular places the empty search box offers. */
+const POPULAR_SHOWN = 6;
 
 interface SearchBarProps {
   autoFocus?: boolean;
@@ -101,7 +99,7 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
 
   const popular = useMemo(() => {
     if (!index) return [];
-    return POPULAR[locale].flatMap(([cc, slug]) => {
+    return POPULAR[locale].slice(0, POPULAR_SHOWN).flatMap(([cc, slug]) => {
       const p = index.places.find((x) => x[1] === cc && x[4] === slug);
       return p ? [fromIndex(p, index)] : [];
     });
@@ -191,9 +189,16 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
     );
   };
 
+  const showSuggestions = open && searchable;
+  const showPopular = open && !searchable && popular.length > 0;
+  // Whichever list the dropdown shows; arrow keys and Enter work on both.
+  const list = searchable ? suggestions : popular;
+  const active = open && highlight >= 0 && highlight < list.length ? highlight : -1;
+  const optionId = (i: number) => `${listId}-option-${i}`;
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const pick = suggestions[highlight] ?? suggestions[0];
+    const pick = suggestions[active] ?? suggestions[0];
     if (pick) go(pick);
   };
 
@@ -202,20 +207,23 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
       setOpen(false);
       return;
     }
-    const list = searchable ? suggestions : [];
+    if (event.key === "Enter" && active >= 0) {
+      // Also covers the popular list, where the submit button is disabled.
+      event.preventDefault();
+      go(list[active]);
+      return;
+    }
     if (!list.length) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setOpen(true);
-      setHighlight((h) => (h + 1) % list.length);
+      setHighlight((h) => (h + 1 >= list.length ? 0 : h + 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setHighlight((h) => (h <= 0 ? list.length - 1 : h - 1));
+      setOpen(true);
+      setHighlight((h) => (h <= 0 || h >= list.length ? list.length - 1 : h - 1));
     }
   };
-
-  const showSuggestions = open && searchable;
-  const showPopular = open && !searchable && popular.length > 0;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -247,6 +255,7 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
             }}
             onFocus={() => {
               setOpen(true);
+              setHighlight(-1);
               ensureIndex();
             }}
             onKeyDown={onKeyDown}
@@ -254,9 +263,10 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
             className="w-full rounded-2xl border border-transparent bg-white/60 py-2.5 pr-9 pl-10 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-sky-400/60 focus:bg-white focus:ring-2 focus:ring-sky-400/30 sm:text-base dark:bg-white/10 dark:text-slate-100 dark:focus:bg-white/15"
             autoComplete="off"
             role="combobox"
-            aria-expanded={showSuggestions}
+            aria-expanded={showSuggestions || showPopular}
             aria-controls={listId}
             aria-autocomplete="list"
+            aria-activedescendant={active >= 0 ? optionId(active) : undefined}
           />
           {query && (
             <button
@@ -301,63 +311,67 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
       </form>
 
       {(showSuggestions || showPopular) && (
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={t.search.suggestions}
-          className="glass animate-pop absolute inset-x-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-2xl p-1.5 shadow-2xl"
-        >
+        <div className="glass animate-pop absolute inset-x-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-2xl p-1.5 shadow-2xl">
           {showPopular && (
-            <>
-              <p className="px-2.5 py-1.5 text-[0.65rem] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
-                {t.search.popular}
-              </p>
-              {popular.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => go(s)}
-                  className="block w-full rounded-xl px-2.5 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-sky-500/15 dark:text-slate-200"
-                >
-                  {s.name}
-                  <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">{s.detail}</span>
-                </button>
-              ))}
-            </>
+            <p
+              id={`${listId}-label`}
+              className="px-2.5 py-1.5 text-[0.65rem] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400"
+            >
+              {t.search.popular}
+            </p>
           )}
 
-          {showSuggestions &&
-            (suggestions.length ? (
-              suggestions.map((s, i) => (
+          {list.length > 0 ? (
+            <div
+              id={listId}
+              role="listbox"
+              aria-labelledby={showPopular ? `${listId}-label` : undefined}
+              aria-label={showPopular ? undefined : t.search.suggestions}
+            >
+              {list.map((s, i) => (
+                // Focus stays in the input (combobox pattern), so options
+                // aren't tab stops; arrow keys move `aria-activedescendant`.
                 <button
                   key={s.key}
+                  id={optionId(i)}
                   type="button"
                   role="option"
-                  aria-selected={i === highlight}
+                  tabIndex={-1}
+                  aria-selected={i === active}
                   onPointerEnter={() => setHighlight(i)}
                   onClick={() => go(s)}
                   className={`flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${
-                    i === highlight ? "bg-sky-500/20" : "hover:bg-sky-500/10"
+                    i === active ? "bg-sky-500/20" : "hover:bg-sky-500/10"
                   }`}
                 >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {showPopular ? (
+                    <span className="text-sm text-slate-700 dark:text-slate-200">
                       {s.name}
+                      <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">{s.detail}</span>
                     </span>
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                      {s.detail}
-                    </span>
-                  </span>
-                  <span className="tabular shrink-0 text-[0.65rem] text-slate-400">
-                    {s.lat.toFixed(1)}°, {s.lon.toFixed(1)}°
-                  </span>
+                  ) : (
+                    <>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                          {s.name}
+                        </span>
+                        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                          {s.detail}
+                        </span>
+                      </span>
+                      <span className="tabular shrink-0 text-[0.65rem] text-slate-400">
+                        {s.lat.toFixed(1)}°, {s.lon.toFixed(1)}°
+                      </span>
+                    </>
+                  )}
                 </button>
-              ))
-            ) : (
-              <p className="px-2.5 py-3 text-sm text-slate-500 dark:text-slate-400">
-                {searching ? t.search.searching : t.search.noMatch}
-              </p>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <p role="status" className="px-2.5 py-3 text-sm text-slate-500 dark:text-slate-400">
+              {searching ? t.search.searching : t.search.noMatch}
+            </p>
+          )}
         </div>
       )}
     </div>

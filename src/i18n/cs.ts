@@ -5,6 +5,7 @@ import type {
   MonthProse,
   OverviewProse,
   RangeProse,
+  SunLine,
 } from "./en";
 
 /**
@@ -26,6 +27,12 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 const days = (n: number) => `${n} ${plural(n, "den", "dny", "dní")}`;
+const sunSentence = (sun: SunLine) =>
+  "rise" in sun
+    ? `Slunce vychází v ${sun.rise} a zapadá v ${sun.set}.`
+    : sun.polar === "day"
+      ? "Slunce nezapadá (polární den)."
+      : "Slunce nevychází (polární noc).";
 const list = (items: string[]) =>
   items.length <= 1
     ? items.join("")
@@ -150,6 +157,8 @@ const cs: Dictionary = {
     notFoundTitle: "Stránka nenalezena",
     notFoundText: "Tuto stránku jsme nenašli. Zkuste vyhledat město.",
     backHome: "Zpět na předpověď",
+    errorTitle: "Něco se pokazilo",
+    errorText: "Tuto stránku se nepodařilo zobrazit. Zkuste to prosím za chvíli znovu.",
   },
 
   search: {
@@ -260,6 +269,10 @@ const cs: Dictionary = {
     illuminated: (p: number) => `osvětleno ${p} %`,
     fullTonight: "úplněk dnes v noci",
     fullIn: (n: number) => `úplněk za ${days(n)}`,
+    polar: {
+      day: "Polární den — slunce dnes nezapadá",
+      night: "Polární noc — slunce dnes nevychází",
+    },
   },
 
   air: {
@@ -423,7 +436,9 @@ const cs: Dictionary = {
   country: {
     title: (country: string) => `Počasí ${country} — aktuální teploty a předpověď`,
     description: (country: string, n: number, sample: string) =>
-      `Aktuální počasí a předpověď pro ${n} ${plural(n, "místo", "místa", "míst")} – ${country}, mimo jiné ${sample}. Hodinová a 14denní předpověď i podnebí.`,
+      n === 1
+        ? `Aktuální počasí a předpověď – ${sample} (${country}). Hodinová a 14denní předpověď i podnebí.`
+        : `Aktuální počasí a předpověď pro ${n} ${plural(n, "místo", "místa", "míst")} – ${country}, mimo jiné ${sample}. Hodinová a 14denní předpověď i podnebí.`,
     h1: (country: string) => `Počasí ${country}`,
     lead: (country: string, n: number) =>
       `Aktuální teploty a počasí – ${country}, ${n} ${plural(n, "místo", "místa", "míst")}. Vyberte místo a zobrazte hodinovou a 14denní předpověď.`,
@@ -515,17 +530,17 @@ const cs: Dictionary = {
         );
       return parts.join(" ");
     },
-    tomorrow: (n: string, d: DayBrief, sunrise: string, sunset: string) =>
+    tomorrow: (n: string, d: DayBrief, sun: SunLine) =>
       `${n} zítra (${d.label}): ${d.cond.toLowerCase()}, nejvýše ${T(d.hi)}, nejníže ${T(d.lo)}. ` +
       (d.pop !== null ? `Pravděpodobnost srážek ${pct(d.pop)}${d.precip >= 0.2 ? `, celkem asi ${mm(d.precip)}` : ""}. ` : "") +
-      `Vítr až ${kmh(d.windMax)}${d.uvMax !== null ? `, UV index až ${r(d.uvMax)}` : ""}. Slunce vychází v ${sunrise} a zapadá v ${sunset}.`,
+      `Vítr až ${kmh(d.windMax)}${d.uvMax !== null ? `, UV index až ${r(d.uvMax)}` : ""}. ${sunSentence(sun)}`,
     hourly: (n: string, hours: number, min: number, max: number, wetHours: number) =>
       `${n}: během příštích ${hours} hodin se teplota pohybuje mezi ${T(min)} a ${T(max)}. ` +
       (wetHours === 0
         ? "Žádná hodina nemá významnou šanci na srážky."
         : `${wetHours} ${plural(wetHours, "hodina má", "hodiny mají", "hodin má")} pravděpodobnost srážek 40 % a více — jsou v tabulce zvýrazněné.`),
     range: (p: RangeProse) =>
-      `${p.name} – výhled na ${p.days} dní: denní maxima mezi ${T(p.hiMin)} a ${T(p.hiMax)}. ` +
+      `${p.name} – výhled na ${days(p.days)}: denní maxima mezi ${T(p.hiMin)} a ${T(p.hiMax)}. ` +
       `Nejtepleji: ${p.warmestLabel} (${T(p.warmestHi)}), nejchladnější noc: ${p.coldestLabel} (${T(p.coldestLo)}). ` +
       (p.wetDays === 0
         ? "Žádný den by neměl přinést 1 mm srážek a více. "
@@ -611,8 +626,29 @@ const cs: Dictionary = {
           `${p.name}: kdy dnes vychází a zapadá slunce?`,
           `Slunce vychází v ${p.sunrise} a zapadá v ${p.sunset} místního času.`,
         ]);
+      else if (p.polar)
+        items.push([
+          `${p.name}: kdy dnes vychází a zapadá slunce?`,
+          p.polar === "day"
+            ? "Slunce dnes vůbec nezapadá — je polární den a světlo trvá 24 hodin."
+            : "Slunce dnes vůbec nevychází — je polární noc.",
+        ]);
       return items;
     },
+    range: (p: RangeProse): Array<[string, string]> => [
+      [
+        `${p.name}: bude během příštích ${p.days} dní pršet?`,
+        p.wetDays === 0
+          ? "Žádný den by neměl přinést 1 mm srážek a více."
+          : `Srážky 1 mm a více ${plural(p.wetDays, "přinese", "přinesou", "přinese")} ${days(p.wetDays)}, nejvíce: ${p.wettestLabel} (${mm(p.wettestPrecip)}).`,
+      ],
+      [`${p.name}: který den bude nejtepleji?`, `Nejtepleji: ${p.warmestLabel}, maximum ${T(p.warmestHi)}.`],
+      [`${p.name}: jak chladné budou noci?`, `Nejchladnější noc: ${p.coldestLabel}, minimum ${T(p.coldestLo)}.`],
+      [
+        `${p.name}: jak spolehlivá je předpověď na ${days(p.days)}?`,
+        "Nejspolehlivější jsou nejbližší dny. Zhruba po týdnu předpověď ukazuje hlavně trend a jednotlivé dny se ještě mohou změnit, proto se podívejte znovu blíž k datu.",
+      ],
+    ],
     climate: (p: ClimateProse) => [
       [`${p.name}: který měsíc je nejteplejší?`, `Nejteplejší je ${MONTHS[p.warmest]}, průměrná maxima ${T(p.warmestHi)}.`],
       [`${p.name}: který měsíc je nejchladnější?`, `Nejchladnější je ${MONTHS[p.coldest]}, průměrná minima ${T(p.coldestLo)}.`],
@@ -728,6 +764,7 @@ const cs: Dictionary = {
       "Má šířku 100 % a výšku 260 px — šířku upravte podle svého webu.",
       "Ponechte prosím viditelný odkaz na WeatherNow; díky němu může widget zůstat zdarma.",
     ],
+    credit: "Předpověď:",
   },
 
   embed: {

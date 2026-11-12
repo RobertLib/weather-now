@@ -90,7 +90,7 @@ export function monthShort(month: number, locale: Locale): string {
     .replace(/\.$/, "");
 }
 
-/** `Nov 12, 2026` / `12. 11. 2026` for absolute dates (UTC). */
+/** `November 12, 2026` / `12. listopadu 2026` for absolute dates (UTC). */
 export function formatCalendarDate(date: Date, locale: Locale): string {
   return formatter(locale, "UTC", {
     year: "numeric",

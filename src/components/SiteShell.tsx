@@ -15,6 +15,10 @@ export default function SiteShell({ locale, children }: { locale: Locale; childr
   const t = getDictionary(locale);
   return (
     <html lang={locale} suppressHydrationWarning>
+      {/* This renders inside root layouts, where a plain <head> is correct;
+          the rule targets the Pages Router and only fires because this file
+          lives outside app/. */}
+      {/* eslint-disable-next-line @next/next/no-head-element */}
       <head>
         {/* Applies the saved theme before first paint to avoid a flash. */}
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />

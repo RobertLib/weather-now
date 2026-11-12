@@ -1,4 +1,5 @@
 import { MonthNormals } from "@/lib/climate";
+import { Temp } from "@/components/Units";
 
 const W = 760;
 const H = 320;
@@ -44,7 +45,7 @@ export default function ClimateChart({
 
   return (
     <div className="-mx-1 overflow-x-auto px-1">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[34rem]" role="img" aria-label={ariaLabel}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-136" role="img" aria-label={ariaLabel}>
         {highlight !== undefined && (
           <rect
             x={PAD.left + col * highlight + 2}
@@ -84,12 +85,13 @@ export default function ClimateChart({
         {months.map((m, i) => (
           <g key={`t${i}`}>
             <circle cx={x(i)} cy={y(m.hi)} r="4" fill="#fff" stroke="#f97316" strokeWidth="2.5" />
+            {/* The curve's shape is unit-independent; only the labels follow °C/°F. */}
             <text x={x(i)} y={y(m.hi) - 9} textAnchor="middle" className="fill-slate-800 text-[11px] font-bold dark:fill-slate-100">
-              {Math.round(m.hi)}°
+              <Temp c={m.hi} />
             </text>
             <circle cx={x(i)} cy={y(m.lo)} r="4" fill="#fff" stroke="#3b82f6" strokeWidth="2.5" />
             <text x={x(i)} y={y(m.lo) + 17} textAnchor="middle" className="fill-slate-600 text-[11px] dark:fill-slate-300">
-              {Math.round(m.lo)}°
+              <Temp c={m.lo} />
             </text>
             <text
               x={x(i)}

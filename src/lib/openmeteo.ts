@@ -7,7 +7,7 @@ import {
   HourlyPoint,
   PollenType,
 } from "@/types/weather";
-import { dayKey } from "@/lib/datetime";
+import { dayKey, hourOfDay } from "@/lib/datetime";
 
 /**
  * Open-Meteo client (https://open-meteo.com, CC BY 4.0). No API key.
@@ -188,24 +188,30 @@ export function normalizeForecast(raw: RawForecast, fetchedAt = Date.now()): For
 
   const d = raw.daily;
   const daily: DailyPoint[] = d.time
-    .map((time, i) => ({
-      date: dayKey(time, raw.timezone),
-      time,
-      code: num(d.weather_code[i]),
-      tempMax: num(d.temperature_2m_max[i], NaN),
-      tempMin: num(d.temperature_2m_min[i], NaN),
-      precipitation: num(d.precipitation_sum[i]),
-      precipHours: num(d.precipitation_hours[i]),
-      pop: d.precipitation_probability_max[i] == null ? null : num(d.precipitation_probability_max[i]) / 100,
-      windMax: num(d.wind_speed_10m_max[i]),
-      gustMax: opt(d.wind_gusts_10m_max[i]),
-      windDir: num(d.wind_direction_10m_dominant[i]),
-      uvMax: opt(d.uv_index_max[i]),
-      sunrise: num(d.sunrise[i]),
-      sunset: num(d.sunset[i]),
-      daylight: num(d.daylight_duration[i]),
-      sunshine: opt(d.sunshine_duration[i]),
-    }))
+    .map((time, i) => {
+      const daylight = num(d.daylight_duration[i]);
+      // During polar night Open-Meteo reports sunrise = sunset = midnight, and
+      // during polar day midnight to midnight; neither is a real event.
+      const polar = daylight <= 0 || daylight >= 86_400;
+      return {
+        date: dayKey(time, raw.timezone),
+        time,
+        code: num(d.weather_code[i]),
+        tempMax: num(d.temperature_2m_max[i], NaN),
+        tempMin: num(d.temperature_2m_min[i], NaN),
+        precipitation: num(d.precipitation_sum[i]),
+        precipHours: num(d.precipitation_hours[i]),
+        pop: d.precipitation_probability_max[i] == null ? null : num(d.precipitation_probability_max[i]) / 100,
+        windMax: num(d.wind_speed_10m_max[i]),
+        gustMax: opt(d.wind_gusts_10m_max[i]),
+        windDir: num(d.wind_direction_10m_dominant[i]),
+        uvMax: opt(d.uv_index_max[i]),
+        sunrise: polar ? null : opt(d.sunrise[i]),
+        sunset: polar ? null : opt(d.sunset[i]),
+        daylight,
+        sunshine: opt(d.sunshine_duration[i]),
+      };
+    })
     // The last model day is sometimes only partially filled.
     .filter((day) => Number.isFinite(day.tempMax) && Number.isFinite(day.tempMin));
 
@@ -243,6 +249,15 @@ export function upcomingHours(forecast: Forecast, count: number, now = Date.now(
 }
 
 /**
+ * Whether an hour is one of the three-hourly slots shown in the expandable day
+ * rows: 00:00, 03:00, … in the location's own clock. (Checking the unix time
+ * would pick UTC slots, which never match in half-hour zones such as India.)
+ */
+export function isThreeHourSlot(unix: number, tz: string): boolean {
+  return hourOfDay(unix, tz) % 3 === 0;
+}
+
+/**
  * What the dashboard actually draws: every hour for the next two days, then
  * three-hourly slots for the expandable day rows. Keeps the serialized props
  * of server-rendered pages small.
@@ -253,7 +268,8 @@ export function slimForecast(forecast: Forecast, now = Date.now()): Forecast {
   return {
     ...forecast,
     hourly: forecast.hourly.filter(
-      (h) => h.time >= start && (h.time < dense || h.time % 10800 === 0)
+      (h) =>
+        h.time >= start && (h.time < dense || isThreeHourSlot(h.time, forecast.timezone))
     ),
     daily: upcomingDays(forecast, now),
   };

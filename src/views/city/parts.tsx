@@ -4,7 +4,7 @@ import { Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { Country, Place, nearbyPlaces, getCountry } from "@/lib/places";
 import { CityView, CITY_VIEWS, countryPath, homePath, pagePath, placePath, worldPath } from "@/lib/routes";
-import { SkyTheme } from "@/lib/conditions";
+import { DEFAULT_THEME, SkyTheme } from "@/lib/conditions";
 import { Crumb } from "@/lib/schema";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import WeatherBackground from "@/components/WeatherBackground";
@@ -37,7 +37,11 @@ interface CityFrameProps {
   h1: string;
   lead?: string;
   crumbs: Crumb[];
-  theme?: SkyTheme;
+  /**
+   * Sky backdrop for the page; defaults to the neutral sky. `null` when a
+   * child (the live dashboard) paints its own.
+   */
+  theme?: SkyTheme | null;
   hasClimate: boolean;
   children: React.ReactNode;
 }
@@ -52,7 +56,7 @@ export function CityFrame({
   h1,
   lead,
   crumbs,
-  theme,
+  theme = DEFAULT_THEME,
   hasClimate,
   children,
 }: CityFrameProps) {
@@ -94,7 +98,7 @@ export function CityFrame({
           <SearchBar />
           <FavoritesBar />
 
-          <nav aria-label={t.city.tabsAria} className="scroll-strip -mx-3 px-3 sm:mx-0 sm:px-0">
+          <nav aria-label={t.city.tabsAria} className="scroll-strip -mx-3 scroll-px-3 px-3 sm:mx-0 sm:scroll-px-0 sm:px-0">
             <ul className="flex gap-1.5">
               {views.map((v) => {
                 const active = v === view && (v !== "climate" || month === undefined);
@@ -225,7 +229,7 @@ export function StatGrid({ items }: { items: Array<{ label: string; value: React
 }
 
 export const tableWrap = "-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0";
-export const tableClass = "w-full min-w-[34rem] border-collapse text-left text-sm";
+export const tableClass = "w-full min-w-136 border-collapse text-left text-sm";
 export const thClass =
   "border-b border-slate-900/10 px-2 py-2 text-[0.7rem] font-semibold tracking-wide text-slate-500 uppercase dark:border-white/10 dark:text-slate-400";
 export const tdClass = "border-b border-slate-900/5 px-2 py-2 tabular dark:border-white/5";

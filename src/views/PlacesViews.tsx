@@ -8,6 +8,7 @@ import {
   COUNTRIES,
   PLACES,
   getCountryBySlug,
+  isCountryHubIndexed,
   placesIn,
 } from "@/lib/places";
 import { countryPath, homePath, placePath, worldPath } from "@/lib/routes";
@@ -102,6 +103,7 @@ export function countryMetadata(locale: Locale, slug: string): Metadata {
     path: countryPath(locale, country),
     alternates: { en: countryPath("en", country), cs: countryPath("cs", country) },
     absoluteTitle: true,
+    noindex: !isCountryHubIndexed(country.cc),
   });
 }
 

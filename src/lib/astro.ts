@@ -43,12 +43,30 @@ export interface DaylightInfo {
   isDay: boolean;
   /** Total daylight in minutes. */
   lengthMinutes: number;
-  /** Minutes until the next sunrise/sunset event. */
-  minutesToNextEvent: number;
-  nextEvent: "sunrise" | "sunset";
+  /** Minutes until the next sunrise/sunset event; null during polar day or night. */
+  minutesToNextEvent: number | null;
+  nextEvent: "sunrise" | "sunset" | null;
+  /** Set when the sun doesn't rise or doesn't set at all today. */
+  polar: "day" | "night" | null;
 }
 
-export function daylightInfo(now: number, sunrise: number, sunset: number): DaylightInfo {
+export function daylightInfo(
+  now: number,
+  day: { sunrise: number | null; sunset: number | null; daylight: number }
+): DaylightInfo {
+  const { sunrise, sunset } = day;
+  if (sunrise === null || sunset === null) {
+    const polarDay = day.daylight > 0;
+    return {
+      progress: polarDay ? 0.5 : 0,
+      isDay: polarDay,
+      lengthMinutes: polarDay ? 1440 : 0,
+      minutesToNextEvent: null,
+      nextEvent: null,
+      polar: polarDay ? "day" : "night",
+    };
+  }
+
   const span = Math.max(1, sunset - sunrise);
   const progress = Math.min(1, Math.max(0, (now - sunrise) / span));
   const isDay = now >= sunrise && now <= sunset;
@@ -60,6 +78,7 @@ export function daylightInfo(now: number, sunrise: number, sunset: number): Dayl
     lengthMinutes: Math.round(span / 60),
     minutesToNextEvent: Math.max(0, Math.round((target - now) / 60)),
     nextEvent: isDay ? "sunset" : "sunrise",
+    polar: null,
   };
 }
 

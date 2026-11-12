@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Locale } from "@/i18n/config";
 import { useI18n } from "@/i18n/client";
-import { PlaceIndex, loadPlaceIndex } from "@/lib/places-client";
-import { SITE_URL } from "@/lib/routes";
+import { getDictionary } from "@/i18n";
+import { PlaceIndex, indexPlacePath, loadPlaceIndex } from "@/lib/places-client";
+import { SITE_URL, absoluteUrl } from "@/lib/routes";
 
 type Theme = "auto" | "light" | "dark";
 
@@ -54,11 +55,10 @@ export default function WidgetBuilder() {
   const embedSrc =
     selected && country ? `/embed/${lang}/${country[2 + L]}/${selected[4 + L]}?theme=${theme}` : null;
   const pageUrl =
-    selected && country
-      ? `${SITE_URL}${lang === "en" ? "/weather" : "/cs/pocasi"}/${country[2 + L]}/${selected[4 + L]}`
-      : SITE_URL;
+    selected && index ? absoluteUrl(indexPlacePath(index, selected, lang)) : SITE_URL;
   const name = selected ? selected[2 + L] : "";
-  const credit = lang === "en" ? "Forecast by" : "Předpověď:";
+  // The snippet speaks the widget's language, not necessarily the page's.
+  const credit = getDictionary(lang).widget.credit;
 
   const snippet = embedSrc
     ? `<iframe src="${SITE_URL}${embedSrc}" title="${name} – WeatherNow" width="100%" height="260" style="border:0;border-radius:16px;max-width:420px" loading="lazy"></iframe>\n<p style="font:12px/1.4 system-ui,sans-serif;margin:4px 0 0">${credit} <a href="${pageUrl}">WeatherNow</a></p>`

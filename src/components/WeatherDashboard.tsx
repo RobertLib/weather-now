@@ -147,7 +147,7 @@ export default function WeatherDashboard({
   const daylight = useMemo(
     () =>
       forecast && today
-        ? daylightInfo(Math.floor(clock / 1000) || forecast.current.time, today.sunrise, today.sunset)
+        ? daylightInfo(Math.floor(clock / 1000) || forecast.current.time, today)
         : null,
     [forecast, today, clock]
   );
@@ -188,7 +188,15 @@ export default function WeatherDashboard({
     }
     setFavorites((list) => [
       ...list,
-      { id: activeId, name: place.name, cc: place.cc, lat: place.lat, lon: place.lon, path: place.path },
+      {
+        id: activeId,
+        name: place.name,
+        cc: place.cc,
+        lat: place.lat,
+        lon: place.lon,
+        path: place.path,
+        i18n: place.i18n,
+      },
     ]);
     setToast(t.favorites.saved(place.name));
   };
@@ -205,8 +213,10 @@ export default function WeatherDashboard({
       try {
         await navigator.share({ title: "WeatherNow", text, url });
         return;
-      } catch {
-        /* dismissed */
+      } catch (err) {
+        // Closing the share sheet is a choice, not a failure — don't copy instead.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        /* share unavailable here (e.g. not allowed) — fall back to the clipboard */
       }
     }
     try {

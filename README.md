@@ -22,13 +22,19 @@ places) gets its own server-rendered pages, in both languages:
 | Climate by month | `…/climate`, `…/climate/november` | `…/podnebi`, `…/podnebi/listopad` |
 
 Each country has a hub page (`/weather/czechia`) with current temperatures, and
-`/weather` lists all countries. All URLs are built in `src/lib/routes.ts`.
+`/weather` lists all countries. Hubs of countries with a single city are
+`noindex, follow` and left out of the sitemap, since they only repeat that
+city's page. All URLs are built in `src/lib/routes.ts`.
 
 **Rendering.** City and country pages use ISR: they render on first request,
 are cached, and refresh at most hourly (`export const revalidate = 3600`).
-Forecast data is fetched on the server, so the HTML already contains the
-forecast, a generated summary paragraph and an FAQ. After hydration the
-dashboard calls Open-Meteo directly from the browser to stay fresh.
+`expireTime` in `next.config.ts` caps how stale a cached page may get (2 h):
+an older page is regenerated before it is served, which matters for the
+tomorrow, hourly, 14-day and air-quality views because they don't refresh in
+the browser. Forecast data is fetched on the server, so the HTML already
+contains the forecast, a generated summary paragraph and an FAQ. After
+hydration the overview dashboard calls Open-Meteo directly from the browser to
+stay fresh.
 
 **Languages.** English lives at the root and Czech under `/cs`, as two route
 groups with their own root layouts (`src/app/(en)`, `src/app/(cs)/cs`). Route
@@ -55,7 +61,11 @@ from the embedding site.
   (CC BY 4.0, no key needed). The free tier is non-commercial and rate-limited
   (10,000 calls/day per IP; requests with many variables count as several
   calls). Server requests are cached for an hour and shared by every page and
-  language of a city.
+  language of a city. Even so, if most of the ~440 cities are regenerated every
+  hour (a busy site, or crawlers working through the sitemap), the server
+  alone can exceed the free quota — and on Vercel the outbound IPs are shared
+  with other projects. Set `OPEN_METEO_API_KEY` in production to avoid 429s,
+  which would leave pages without server-rendered data for an hour.
 - **Places:** `scripts/build-places.mjs` produces `src/data/places.json` and
   `src/data/countries.json`. It starts from `scripts/seed-cities.json` plus an
   extra list inside the script, resolves each place through the Open-Meteo
@@ -71,8 +81,15 @@ from the embedding site.
 
 Regenerate the datasets with `npm run data`. A cold run takes about 20 minutes
 (mostly NASA POWER); downloads are cached in `$DATA_CACHE_DIR`, which defaults
-to `<os tmp>/weather-now-data-cache`. Keep URL slugs stable once pages are
-indexed.
+to `<os tmp>/weather-now-data-cache`.
+
+URL slugs are published URLs, so `build-places.mjs` keeps every slug already in
+`places.json` / `countries.json` (by place id and country code), even when
+GeoNames renames a place or Node's ICU data renames a country. A new namesake
+gets a region suffix instead of renaming the existing city. Review the `*`
+notes the script prints: they list kept slugs whose names changed and removed
+places whose URLs will start returning 404. The logic lives in
+`scripts/lib/slugs.mjs` and is covered by tests.
 
 ## Environment variables
 
@@ -89,6 +106,7 @@ npm install
 npm run dev     # http://localhost:3000
 npm run build   # type-check and production build
 npm run lint
+npm test        # unit tests (Vitest): routes, forecast shaping, astronomy, data, copy
 ```
 
 Homepage geolocation (`/api/locate`) reads Vercel's IP headers, so it only

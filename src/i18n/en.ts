@@ -13,6 +13,12 @@ const pct = (p: number) => `${r(p * 100)}%`;
 const mm = (v: number) => `${v < 10 ? v.toFixed(1) : r(v)} mm`;
 const kmh = (ms: number) => `${r(ms * 3.6)} km/h`;
 const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
+const sunSentence = (sun: SunLine) =>
+  "rise" in sun
+    ? `The sun rises at ${sun.rise} and sets at ${sun.set}.`
+    : sun.polar === "day"
+      ? "The sun doesn't set (polar day)."
+      : "The sun doesn't rise (polar night).";
 const list = (items: string[]) =>
   items.length <= 1
     ? items.join("")
@@ -64,7 +70,12 @@ export interface OverviewProse {
   } | null;
   sunrise: string | null;
   sunset: string | null;
+  /** Set when the sun doesn't rise or set today (no sunrise/sunset then). */
+  polar: "day" | "night" | null;
 }
+
+/** Sunrise and sunset for one day, or the polar day/night that replaces them. */
+export type SunLine = { rise: string; set: string } | { polar: "day" | "night" };
 
 export interface RangeProse {
   name: string;
@@ -205,6 +216,8 @@ const en = {
     notFoundTitle: "Page not found",
     notFoundText: "We couldn't find that page. Try searching for a city instead.",
     backHome: "Back to the forecast",
+    errorTitle: "Something went wrong",
+    errorText: "This page couldn't be displayed. Please try again in a moment.",
   },
 
   search: {
@@ -315,6 +328,10 @@ const en = {
     illuminated: (pct: number) => `${pct}% illuminated`,
     fullTonight: "full tonight",
     fullIn: (n: number) => `full moon in ${days(n)}`,
+    polar: {
+      day: "Polar day — the sun doesn't set today",
+      night: "Polar night — the sun doesn't rise today",
+    },
   },
 
   air: {
@@ -480,10 +497,14 @@ const en = {
   country: {
     title: (country: string) => `Weather in ${country} — Current Temperatures & Forecasts`,
     description: (country: string, n: number, sample: string) =>
-      `Current weather and forecasts for ${n} places in ${country}, including ${sample}. Hourly, 14-day and climate data.`,
+      n === 1
+        ? `Current weather and forecast for ${sample}, ${country}. Hourly, 14-day and climate data.`
+        : `Current weather and forecasts for ${n} places in ${country}, including ${sample}. Hourly, 14-day and climate data.`,
     h1: (country: string) => `Weather in ${country}`,
     lead: (country: string, n: number) =>
-      `Current temperatures and conditions in ${n} places across ${country}. Select a place for the hourly and 14-day forecast.`,
+      n === 1
+        ? `Current temperature and conditions in ${country}. Select the place for its hourly and 14-day forecast.`
+        : `Current temperatures and conditions in ${n} places across ${country}. Select a place for the hourly and 14-day forecast.`,
     warmest: (name: string, t: number) => `Warmest right now: ${name}, ${T(t)}.`,
     coldest: (name: string, t: number) => `Coldest: ${name}, ${T(t)}.`,
     place: "Place",
@@ -574,10 +595,10 @@ const en = {
         );
       return parts.join(" ");
     },
-    tomorrow: (n: string, d: DayBrief, sunrise: string, sunset: string) =>
+    tomorrow: (n: string, d: DayBrief, sun: SunLine) =>
       `Tomorrow (${d.label}) ${n} can expect ${d.cond.toLowerCase()} with a high of ${T(d.hi)} and a low of ${T(d.lo)}. ` +
       (d.pop !== null ? `The chance of precipitation is ${pct(d.pop)}${d.precip >= 0.2 ? `, with about ${mm(d.precip)} in total` : ""}. ` : "") +
-      `Winds reach ${kmh(d.windMax)}${d.uvMax !== null ? ` and the UV index peaks at ${r(d.uvMax)}` : ""}. The sun rises at ${sunrise} and sets at ${sunset}.`,
+      `Winds reach ${kmh(d.windMax)}${d.uvMax !== null ? ` and the UV index peaks at ${r(d.uvMax)}` : ""}. ${sunSentence(sun)}`,
     hourly: (n: string, hours: number, min: number, max: number, wetHours: number) =>
       `Over the next ${hours} hours temperatures in ${n} range between ${T(min)} and ${T(max)}. ` +
       (wetHours === 0
@@ -668,8 +689,30 @@ const en = {
           `What time is sunrise and sunset in ${p.name} today?`,
           `The sun rises at ${p.sunrise} and sets at ${p.sunset} local time.`,
         ]);
+      else if (p.polar)
+        items.push([
+          `What time is sunrise and sunset in ${p.name} today?`,
+          p.polar === "day"
+            ? `The sun doesn't set in ${p.name} today — it's polar day, with 24 hours of daylight.`
+            : `The sun doesn't rise in ${p.name} today — it's polar night.`,
+        ]);
       return items;
     },
+    range: (p: RangeProse) =>
+      [
+        [
+          `Will it rain in ${p.name} in the next ${p.days} days?`,
+          p.wetDays === 0
+            ? `No day in the next ${p.days} is expected to bring 1 mm or more of precipitation.`
+            : `${days(p.wetDays)} should bring 1 mm or more of precipitation; the wettest looks to be ${p.wettestLabel}, with about ${mm(p.wettestPrecip)}.`,
+        ],
+        [`Which day will be the warmest in ${p.name}?`, `${p.warmestLabel} looks warmest, with a high of ${T(p.warmestHi)}.`],
+        [`How cold will the nights get in ${p.name}?`, `The coldest night looks to be ${p.coldestLabel}, with a low of ${T(p.coldestLo)}.`],
+        [
+          `How reliable is the ${p.days}-day forecast for ${p.name}?`,
+          "The next few days are the most dependable. Beyond about a week the forecast shows the general trend, and individual days can still change, so check back closer to the date.",
+        ],
+      ] as Array<[string, string]>,
     climate: (p: ClimateProse) =>
       [
         [`What is the warmest month in ${p.name}?`, `${MONTHS[p.warmest]} is the warmest month, with average highs of ${T(p.warmestHi)}.`],
@@ -787,6 +830,8 @@ const en = {
       "It is 100% wide and 260 px tall — adjust the width to fit your layout.",
       "Please keep the WeatherNow credit link visible; it is what keeps the widget free.",
     ],
+    /** Text before the credit link in the embed snippet. */
+    credit: "Forecast by",
   },
 
   embed: {
