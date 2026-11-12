@@ -148,15 +148,17 @@ export default function HomeClient() {
     const lat = params.get("lat");
     const lon = params.get("lon");
 
-    if (lat && lon && !Number.isNaN(+lat) && !Number.isNaN(+lon)) {
-      load({ kind: "coords", lat: +lat, lon: +lon });
-    } else if (q) {
-      load({ kind: "city", city: q });
-    } else if (lastTarget) {
-      load(lastTarget);
-    } else {
-      load({ kind: "city", city: FALLBACK_CITY });
-    }
+    const initial: Target =
+      lat && lon && !Number.isNaN(+lat) && !Number.isNaN(+lon)
+        ? { kind: "coords", lat: +lat, lon: +lon }
+        : q
+          ? { kind: "city", city: q }
+          : (lastTarget ?? { kind: "city", city: FALLBACK_CITY });
+
+    // Fetching on mount is the whole point of this effect. isLoading already
+    // starts true and error null, so load()'s synchronous updates are no-ops.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load(initial);
     // Intentionally runs once, as soon as stored preferences are available.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastTargetHydrated]);
@@ -439,7 +441,7 @@ export default function HomeClient() {
               <ErrorMessage
                 message={error}
                 onClose={() => setError(null)}
-                onRetry={targetRef.current ? refresh : undefined}
+                onRetry={refresh}
               />
             )}
 

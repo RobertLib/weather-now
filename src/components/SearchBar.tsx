@@ -56,43 +56,46 @@ export default function SearchBar({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<GeoLocation[]>([]);
+  const [remote, setRemote] = useState<{
+    term: string;
+    results: GeoLocation[];
+  } | null>(null);
   const [open, setOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+
+  const term = query.trim();
+  const searchable = term.length >= 2;
 
   // Local index answers instantly; the API fills in everything else.
   const localMatches = useMemo(() => matchCities(query, 4), [query]);
+  const remoteResults = remote?.term === term ? remote.results : null;
+  const searching = searchable && remoteResults === null;
+  const suggestions = useMemo(() => {
+    if (!searchable) return [];
+    return remoteResults
+      ? mergeSuggestions(localMatches, remoteResults)
+      : localMatches;
+  }, [searchable, localMatches, remoteResults]);
 
   useEffect(() => {
-    const term = query.trim();
-    if (term.length < 2) {
-      setSuggestions([]);
-      setSearching(false);
-      return;
-    }
+    if (term.length < 2) return;
 
     let stale = false;
-    setSuggestions(localMatches);
-    setHighlight(-1);
-    setSearching(true);
-
     const timer = setTimeout(async () => {
+      let results: GeoLocation[] = [];
       try {
-        const results = await searchLocations(term);
-        if (!stale) setSuggestions(mergeSuggestions(localMatches, results));
+        results = await searchLocations(term);
       } catch {
-        if (!stale) setSuggestions(localMatches);
-      } finally {
-        if (!stale) setSearching(false);
+        // Fall back to local matches only.
       }
+      if (!stale) setRemote({ term, results });
     }, 280);
 
     return () => {
       stale = true;
       clearTimeout(timer);
     };
-  }, [query, localMatches]);
+  }, [term]);
 
   // Close the dropdown when clicking elsewhere.
   useEffect(() => {
@@ -122,7 +125,6 @@ export default function SearchBar({
 
   const pick = (location: GeoLocation) => {
     setQuery("");
-    setSuggestions([]);
     setOpen(false);
     inputRef.current?.blur();
     onSelectLocation(location);
@@ -186,6 +188,7 @@ export default function SearchBar({
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
+              setHighlight(-1);
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
