@@ -1,13 +1,13 @@
 "use client";
 
 import { useId } from "react";
-import { ConditionKind, conditionKind, isNightIcon } from "@/lib/conditions";
+import { ConditionKind, conditionKind } from "@/lib/conditions";
 
 interface WeatherIconProps {
-  /** OpenWeather condition id, e.g. 803. */
-  id: number;
-  /** OpenWeather icon code, e.g. `04n` — only the day/night suffix is used. */
-  icon: string;
+  /** WMO weather code. */
+  code: number;
+  /** Draw the moon instead of the sun. */
+  night?: boolean;
   className?: string;
   /** Turn off the internal animations for dense lists. */
   animated?: boolean;
@@ -15,19 +15,18 @@ interface WeatherIconProps {
 }
 
 /**
- * Hand-drawn animated weather glyphs. Replaces the bitmap icons served by
- * OpenWeather so the artwork scales, matches the palette and moves a little.
+ * Hand-drawn animated weather glyphs. Replaces the bitmap icons weather
+ * services usually serve so the artwork scales, matches the palette and moves a little.
  */
 export default function WeatherIcon({
-  id,
-  icon,
+  code,
+  night = false,
   className = "w-16 h-16",
   animated = true,
   title,
 }: WeatherIconProps) {
   const uid = useId().replace(/:/g, "");
-  const kind = conditionKind(id);
-  const night = isNightIcon(icon);
+  const kind = conditionKind(code);
 
   return (
     <svg

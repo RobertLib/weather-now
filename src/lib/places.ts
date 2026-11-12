@@ -1,0 +1,166 @@
+import placesData from "@/data/places.json";
+import countriesData from "@/data/countries.json";
+import { Locale } from "@/i18n/config";
+
+/**
+ * The curated place index: every city that gets its own indexable pages.
+ * Server-side only — the browser uses the slimmer `places-index.ts`.
+ */
+
+export interface Place {
+  id: number;
+  cc: string;
+  en: string;
+  cs: string;
+  slug: Record<Locale, string>;
+  a1?: Record<Locale, string>;
+  lat: number;
+  lon: number;
+  ele: number;
+  tz: string;
+  pop: number;
+}
+
+export interface Country {
+  cc: string;
+  en: string;
+  cs: string;
+  slug: Record<Locale, string>;
+  continent: string;
+}
+
+export const PLACES = placesData as Place[];
+
+export const COUNTRIES: Country[] = Object.entries(
+  countriesData as Record<string, Omit<Country, "cc">>
+).map(([cc, country]) => ({ cc, ...country }));
+
+const COUNTRY_BY_CC = new Map(COUNTRIES.map((c) => [c.cc, c]));
+
+const COUNTRY_BY_SLUG: Record<Locale, Map<string, Country>> = {
+  en: new Map(COUNTRIES.map((c) => [c.slug.en, c])),
+  cs: new Map(COUNTRIES.map((c) => [c.slug.cs, c])),
+};
+
+const PLACES_BY_CC = new Map<string, Place[]>();
+for (const place of PLACES) {
+  const list = PLACES_BY_CC.get(place.cc) ?? [];
+  list.push(place);
+  PLACES_BY_CC.set(place.cc, list);
+}
+
+export const CONTINENT_ORDER = ["EU", "NA", "AS", "SA", "AF", "OC"];
+
+export function getCountry(cc: string): Country | undefined {
+  return COUNTRY_BY_CC.get(cc);
+}
+
+export function getCountryBySlug(locale: Locale, slug: string): Country | undefined {
+  return COUNTRY_BY_SLUG[locale].get(slug);
+}
+
+/** Places in a country, largest first. */
+export function placesIn(cc: string): Place[] {
+  return PLACES_BY_CC.get(cc) ?? [];
+}
+
+export function getPlaceBySlug(
+  locale: Locale,
+  countrySlug: string,
+  placeSlug: string
+): { place: Place; country: Country } | null {
+  const country = getCountryBySlug(locale, countrySlug);
+  if (!country) return null;
+  const place = placesIn(country.cc).find((p) => p.slug[locale] === placeSlug);
+  return place ? { place, country } : null;
+}
+
+/** Great-circle distance in km. */
+export function distanceKm(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number }
+): number {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLon = (b.lon - a.lon) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+}
+
+export function nearbyPlaces(
+  place: Place,
+  limit = 8,
+  maxKm = 600
+): Array<{ place: Place; km: number }> {
+  return PLACES.filter((p) => p.id !== place.id)
+    .map((p) => ({ place: p, km: distanceKm(place, p) }))
+    .filter((entry) => entry.km <= maxKm)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit);
+}
+
+export function nearestPlace(
+  lat: number,
+  lon: number,
+  maxKm: number
+): { place: Place; km: number } | null {
+  let best: { place: Place; km: number } | null = null;
+  for (const place of PLACES) {
+    const km = distanceKm({ lat, lon }, place);
+    if (km <= maxKm && (!best || km < best.km)) best = { place, km };
+  }
+  return best;
+}
+
+/**
+ * Hand-picked for the homepage and footer: the most searched destinations
+ * for each audience. Unknown entries are skipped silently.
+ */
+const POPULAR: Record<Locale, Array<[string, string]>> = {
+  en: [
+    ["GB", "london"],
+    ["US", "new-york"],
+    ["FR", "paris"],
+    ["JP", "tokyo"],
+    ["AE", "dubai"],
+    ["ES", "barcelona"],
+    ["IT", "rome"],
+    ["AU", "sydney"],
+    ["US", "los-angeles"],
+    ["DE", "berlin"],
+    ["SG", "singapore"],
+    ["CZ", "prague"],
+  ],
+  cs: [
+    ["CZ", "prague"],
+    ["CZ", "brno"],
+    ["CZ", "ostrava"],
+    ["CZ", "plzen"],
+    ["CZ", "liberec"],
+    ["CZ", "olomouc"],
+    ["CZ", "ceske-budejovice"],
+    ["CZ", "hradec-kralove"],
+    ["SK", "bratislava"],
+    ["AT", "vienna"],
+    ["HR", "split"],
+    ["GB", "london"],
+  ],
+};
+
+export function popularPlaces(locale: Locale): Place[] {
+  return POPULAR[locale].flatMap(([cc, slug]) => {
+    const place = placesIn(cc).find((p) => p.slug.en === slug);
+    return place ? [place] : [];
+  });
+}
+
+/** Countries with the most curated places, for footer links. */
+export function topCountries(locale: Locale, limit = 8): Country[] {
+  const preferred = locale === "cs" ? ["CZ", "SK", "AT", "DE", "HR", "IT", "GR", "ES"] : ["US", "GB", "CA", "AU", "DE", "FR", "IT", "ES"];
+  return preferred.flatMap((cc) => {
+    const c = getCountry(cc);
+    return c ? [c] : [];
+  }).slice(0, limit);
+}

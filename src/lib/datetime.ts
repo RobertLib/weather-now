@@ -1,92 +1,110 @@
+import { INTL_LOCALE, Locale } from "@/i18n/config";
+
 /**
- * OpenWeather returns UTC timestamps plus the location's UTC offset in seconds.
- * Shifting the timestamp by that offset and then formatting in UTC yields the
- * wall-clock time *at the location*, not in the visitor's own time zone.
+ * All formatting happens in the *location's* IANA time zone, so a visitor in
+ * Prague looking at Tokyo sees Tokyo wall-clock times, DST included.
+ * Formatter construction is expensive, hence the cache.
  */
-function shifted(unixSeconds: number, tzOffsetSeconds: number): Date {
-  return new Date((unixSeconds + tzOffsetSeconds) * 1000);
+const cache = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(
+  locale: Locale | "iso",
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  const key = `${locale}|${timeZone}|${JSON.stringify(options)}`;
+  let f = cache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale === "iso" ? "en-CA" : INTL_LOCALE[locale], {
+      timeZone,
+      ...options,
+    });
+    cache.set(key, f);
+  }
+  return f;
 }
 
-const LOCALE = "en-US";
+const ms = (unixSeconds: number) => new Date(unixSeconds * 1000);
 
-export function formatLocalTime(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toLocaleTimeString(LOCALE, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
+/** `3:45 PM` / `15:45`. */
+export function formatTime(unix: number, tz: string, locale: Locale): string {
+  return formatter(locale, tz, { hour: "numeric", minute: "2-digit" }).format(ms(unix));
 }
 
-/** Compact label for the hourly strip, e.g. `3 PM`. */
-export function formatLocalHour(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toLocaleTimeString(LOCALE, {
-    hour: "numeric",
-    timeZone: "UTC",
-  });
+/** Compact hour label: `3 PM` / `15:00`. */
+export function formatHour(unix: number, tz: string, locale: Locale): string {
+  return locale === "en"
+    ? formatter(locale, tz, { hour: "numeric" }).format(ms(unix))
+    : formatTime(unix, tz, locale);
 }
 
-export function formatLocalDate(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toLocaleDateString(LOCALE, {
+/** `Thursday, November 12` / `čtvrtek 12. listopadu`. */
+export function formatDate(unix: number, tz: string, locale: Locale): string {
+  return formatter(locale, tz, {
     weekday: "long",
     month: "long",
     day: "numeric",
-    timeZone: "UTC",
-  });
+  }).format(ms(unix));
 }
 
-export function formatLocalWeekday(
-  unixSeconds: number,
-  tzOffsetSeconds: number,
+export function formatWeekday(
+  unix: number,
+  tz: string,
+  locale: Locale,
   style: "long" | "short" = "long"
 ): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toLocaleDateString(LOCALE, {
-    weekday: style,
-    timeZone: "UTC",
-  });
+  return formatter(locale, tz, { weekday: style }).format(ms(unix));
 }
 
-export function formatLocalDayMonth(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toLocaleDateString(LOCALE, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+/** `Nov 12` / `12. 11.` */
+export function formatDayMonth(unix: number, tz: string, locale: Locale): string {
+  return formatter(locale, tz, { month: "short", day: "numeric" }).format(ms(unix));
 }
 
-/** `YYYY-MM-DD` key in the location's own calendar day. */
-export function localDayKey(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): string {
-  return shifted(unixSeconds, tzOffsetSeconds).toISOString().slice(0, 10);
+/** `November 12` / `12. listopadu` */
+export function formatLongDayMonth(unix: number, tz: string, locale: Locale): string {
+  return formatter(locale, tz, { month: "long", day: "numeric" }).format(ms(unix));
+}
+
+/** `YYYY-MM-DD` in the location's calendar. */
+export function dayKey(unix: number, tz: string): string {
+  return formatter("iso", tz, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(ms(unix));
 }
 
 /** Hour of day (0-23) at the location. */
-export function localHourOfDay(
-  unixSeconds: number,
-  tzOffsetSeconds: number
-): number {
-  return shifted(unixSeconds, tzOffsetSeconds).getUTCHours();
+export function hourOfDay(unix: number, tz: string): number {
+  const part = formatter("iso", tz, { hour: "numeric", hourCycle: "h23" })
+    .formatToParts(ms(unix))
+    .find((p) => p.type === "hour");
+  return Number(part?.value ?? 0) % 24;
 }
 
-/** "Updated 4 min ago" style label. */
-export function relativeTime(from: number, now: number = Date.now()): string {
-  const seconds = Math.max(0, Math.round((now - from) / 1000));
-  if (seconds < 45) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+/** Abbreviated month: `Jun` / `čvn`. */
+export function monthShort(month: number, locale: Locale): string {
+  return formatter(locale, "UTC", { month: "short" })
+    .format(new Date(Date.UTC(2024, month, 15)))
+    .replace(/\.$/, "");
+}
+
+/** `Nov 12, 2026` / `12. 11. 2026` for absolute dates (UTC). */
+export function formatCalendarDate(date: Date, locale: Locale): string {
+  return formatter(locale, "UTC", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
+/** Duration in minutes → `9 h 12 min`. */
+export function formatDuration(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
 }

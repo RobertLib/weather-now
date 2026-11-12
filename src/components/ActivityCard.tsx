@@ -2,6 +2,7 @@
 
 import { Activity } from "lucide-react";
 import { ActivityScore } from "@/lib/insights";
+import { useI18n } from "@/i18n/client";
 import Card from "./Card";
 
 function scoreColor(score: number): string {
@@ -19,12 +20,13 @@ interface ActivityCardProps {
 
 /** Playful "how good is today for…" ratings — the reason to come back daily. */
 export default function ActivityCard({ scores, delay = 0 }: ActivityCardProps) {
+  const { t } = useI18n();
   const best = scores.reduce((a, b) => (b.score > a.score ? b : a));
 
   return (
     <Card
-      title="Good day for…"
-      subtitle={`Today's winner: ${best.label.toLowerCase()} ${best.emoji}`}
+      title={t.activities.title}
+      subtitle={t.activities.winner(t.activities.labels[best.id], best.emoji)}
       icon={<Activity className="h-4 w-4" aria-hidden="true" />}
       delay={delay}
     >
@@ -35,7 +37,7 @@ export default function ActivityCard({ scores, delay = 0 }: ActivityCardProps) {
               {item.emoji}
             </span>
             <span className="w-20 shrink-0 text-xs font-medium sm:w-24 sm:text-sm">
-              {item.label}
+              {t.activities.labels[item.id]}
             </span>
             <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-900/10 dark:bg-white/10">
               <span
@@ -50,14 +52,13 @@ export default function ActivityCard({ scores, delay = 0 }: ActivityCardProps) {
               className="w-16 shrink-0 text-right text-[0.68rem] font-semibold sm:w-20 sm:text-xs"
               style={{ color: scoreColor(item.score) }}
             >
-              {item.verdict}
+              {t.activities.verdicts[item.level]}
             </span>
           </li>
         ))}
       </ul>
       <p className="mt-3 text-[0.68rem] text-slate-500 dark:text-slate-400">
-        Scores blend temperature, wind, cloud cover and rain chance. For fun —
-        use your own judgement.
+        {t.activities.note}
       </p>
     </Card>
   );

@@ -1,7 +1,7 @@
 {
   "name": "weather-now",
   "version": "0.1.0",
-  "description": "Real-time weather application providing accurate forecasts and current conditions worldwide",
+  "description": "Fast, ad-free weather forecasts for cities worldwide: hourly and 14-day forecasts, air quality, sunrise times and climate averages.",
   "author": {
     "name": "Robert Libsansky",
     "url": "https://github.com/RobertLib"
@@ -27,7 +27,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "data": "node scripts/build-places.mjs && node scripts/build-climate.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

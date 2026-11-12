@@ -1,165 +1,140 @@
-export interface CurrentWeather {
-  coord: {
-    lon: number;
-    lat: number;
-  };
-  weather: WeatherInfo[];
-  base: string;
-  main: {
-    temp: number;
-    feels_like: number;
-    temp_min: number;
-    temp_max: number;
-    pressure: number;
-    humidity: number;
-    sea_level?: number;
-    grnd_level?: number;
-  };
-  visibility: number;
-  wind: {
-    speed: number;
-    deg: number;
-    gust?: number;
-  };
-  clouds: {
-    all: number;
-  };
-  rain?: {
-    "1h"?: number;
-    "3h"?: number;
-  };
-  snow?: {
-    "1h"?: number;
-    "3h"?: number;
-  };
-  dt: number;
-  sys: {
-    type?: number;
-    id?: number;
-    country: string;
-    sunrise: number;
-    sunset: number;
-  };
-  timezone: number;
-  id: number;
-  name: string;
-  cod: number;
+/**
+ * Normalised weather model. Everything from the upstream API is converted into
+ * these shapes in `lib/openmeteo.ts`, so components never see raw responses.
+ *
+ * Units: °C, m/s, hPa, mm, metres, unix seconds. Probabilities are 0-1.
+ */
+
+export interface CurrentConditions {
+  time: number;
+  temp: number;
+  feelsLike: number;
+  humidity: number;
+  pressure: number;
+  windSpeed: number;
+  windGust: number | null;
+  windDir: number;
+  clouds: number;
+  precipitation: number;
+  /** WMO weather interpretation code. */
+  code: number;
+  isDay: boolean;
 }
 
-export interface WeatherInfo {
-  id: number;
-  main: string;
-  description: string;
-  icon: string;
-}
-
-export interface ForecastData {
-  cod: string;
-  message: number;
-  cnt: number;
-  list: ForecastItem[];
-  city: {
-    id: number;
-    name: string;
-    coord: {
-      lat: number;
-      lon: number;
-    };
-    country: string;
-    population: number;
-    timezone: number;
-    sunrise: number;
-    sunset: number;
-  };
-}
-
-export interface ForecastItem {
-  dt: number;
-  main: {
-    temp: number;
-    feels_like: number;
-    temp_min: number;
-    temp_max: number;
-    pressure: number;
-    sea_level: number;
-    grnd_level: number;
-    humidity: number;
-    temp_kf: number;
-  };
-  weather: WeatherInfo[];
-  clouds: {
-    all: number;
-  };
-  wind: {
-    speed: number;
-    deg: number;
-    gust?: number;
-  };
-  visibility: number;
+export interface HourlyPoint {
+  time: number;
+  temp: number;
+  feelsLike: number;
+  humidity: number;
   pop: number;
-  rain?: {
-    "3h": number;
-  };
-  snow?: {
-    "3h": number;
-  };
-  sys: {
-    pod: string;
-  };
-  dt_txt: string;
+  precipitation: number;
+  code: number;
+  clouds: number;
+  pressure: number;
+  windSpeed: number;
+  windGust: number | null;
+  windDir: number;
+  visibility: number | null;
+  uv: number | null;
+  isDay: boolean;
 }
 
-export interface DailyForecast {
+export interface DailyPoint {
   /** `YYYY-MM-DD` in the location's own calendar. */
   date: string;
-  /** Timestamp of the first slot of that day, for weekday formatting. */
-  dt: number;
-  temp_min: number;
-  temp_max: number;
-  /** Condition taken from the slot closest to local midday. */
-  weather: WeatherInfo;
-  humidity: number;
-  wind_speed: number;
-  wind_deg: number;
-  pop: number;
-  /** Total precipitation for the day in mm. */
+  /** Local midnight as unix seconds. */
+  time: number;
+  code: number;
+  tempMax: number;
+  tempMin: number;
   precipitation: number;
-  /** All 3-hour slots belonging to this day, for the expandable detail row. */
-  items: ForecastItem[];
+  precipHours: number;
+  pop: number | null;
+  windMax: number;
+  gustMax: number | null;
+  windDir: number;
+  uvMax: number | null;
+  sunrise: number;
+  sunset: number;
+  /** Seconds. */
+  daylight: number;
+  /** Seconds. */
+  sunshine: number | null;
 }
 
-export interface GeoLocation {
-  name: string;
+export interface Forecast {
   lat: number;
   lon: number;
-  country: string;
-  state?: string;
-  local_names?: Record<string, string>;
+  elevation: number;
+  /** IANA zone, e.g. `Europe/Prague`. */
+  timezone: string;
+  /** Milliseconds; when this snapshot was fetched upstream. */
+  fetchedAt: number;
+  current: CurrentConditions;
+  hourly: HourlyPoint[];
+  daily: DailyPoint[];
+}
+
+export type PollenType =
+  | "alder"
+  | "birch"
+  | "grass"
+  | "mugwort"
+  | "olive"
+  | "ragweed";
+
+export interface Pollutants {
+  pm2_5: number | null;
+  pm10: number | null;
+  no2: number | null;
+  o3: number | null;
+  so2: number | null;
+  co: number | null;
 }
 
 export interface AirQuality {
-  coord: { lon: number; lat: number };
-  list: Array<{
-    dt: number;
-    main: { aqi: number };
-    components: {
-      co: number;
-      no: number;
-      no2: number;
-      o3: number;
-      so2: number;
-      pm2_5: number;
-      pm10: number;
-      nh3: number;
-    };
-  }>;
+  time: number;
+  timezone: string;
+  /** European AQI, 0 (clean) upwards; above 100 is extremely poor. */
+  europeanAqi: number | null;
+  usAqi: number | null;
+  pollutants: Pollutants;
+  /** Grains/m³. Only modelled for Europe; empty elsewhere. */
+  pollen: Partial<Record<PollenType, number>>;
+  /** Daily worst-case European AQI for the next few days. */
+  days: Array<{ date: string; time: number; europeanAqi: number | null }>;
+}
+
+/** A search hit or any coordinate pair worth naming. */
+export interface GeoLocation {
+  /** GeoNames id when known. */
+  id?: number;
+  name: string;
+  lat: number;
+  lon: number;
+  /** ISO 3166-1 alpha-2. */
+  cc: string;
+  country?: string;
+  admin1?: string;
+}
+
+/** A place the dashboard can show — curated or ad hoc. */
+export interface PlaceRef {
+  name: string;
+  cc: string;
+  countryName?: string;
+  lat: number;
+  lon: number;
+  /** Canonical page for curated places. */
+  path?: string;
 }
 
 /** A city the user pinned for one-tap access. */
 export interface SavedCity {
   id: string;
   name: string;
-  country: string;
+  cc: string;
   lat: number;
   lon: number;
+  path?: string;
 }

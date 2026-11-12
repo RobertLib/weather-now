@@ -11,10 +11,11 @@ import {
   Minus,
   Wind,
 } from "lucide-react";
-import { CurrentWeather, ForecastItem } from "@/types/weather";
+import { CurrentConditions, HourlyPoint } from "@/types/weather";
 import { SkyTheme } from "@/lib/conditions";
 import {
   UnitSystem,
+  compassIndex,
   convertDistance,
   convertSpeed,
   distanceUnit,
@@ -22,90 +23,86 @@ import {
   formatTemp,
   pressureUnit,
   speedUnit,
-  windDescription,
-  windDirection,
+  windLevel,
 } from "@/lib/units";
-import { dewPoint, dewPointComfort, pressureTrend, sunStrength } from "@/lib/meteo";
-import { DaylightInfo } from "@/lib/astro";
+import { UV_COLORS, dewComfortLevel, dewPoint, pressureTrend, uvLevel } from "@/lib/meteo";
+import { useI18n } from "@/i18n/client";
 import { ArcGauge, CompassGauge, RingGauge, SegmentGauge } from "./Gauges";
 
 interface HighlightsGridProps {
-  weather: CurrentWeather;
-  hourly: ForecastItem[];
+  current: CurrentConditions;
+  hourly: HourlyPoint[];
   theme: SkyTheme;
   units: UnitSystem;
-  daylight: DaylightInfo;
+  /** Today's peak UV, used when the sun is down. */
+  uvMax: number | null;
 }
 
 export default function HighlightsGrid({
-  weather,
+  current,
   hourly,
   theme,
   units,
-  daylight,
+  uvMax,
 }: HighlightsGridProps) {
+  const { t } = useI18n();
+  const h = t.highlights;
   const accent = theme.accent;
-  const dp = dewPoint(weather.main.temp, weather.main.humidity);
-  const trend = pressureTrend(
-    weather.main.pressure,
-    hourly.slice(0, 2).map((h) => h.main.pressure)
-  );
-  const visibilityKm = weather.visibility / 1000;
-  const sun = sunStrength(
-    weather.clouds.all,
-    daylight.progress,
-    daylight.isDay
-  );
+  const dp = dewPoint(current.temp, current.humidity);
+  const trend = pressureTrend(current.pressure, hourly[3]?.pressure);
+  const visibility = hourly[0]?.visibility ?? null;
+  const visibilityKm = visibility === null ? null : visibility / 1000;
+  const uvNow = hourly[0]?.uv ?? null;
+  const uv = current.isDay ? uvNow : null;
+  const uvShown = uv ?? uvMax ?? 0;
+  const level = uvLevel(uvShown);
+  const clouds = current.clouds;
 
   const TrendIcon =
-    trend.direction === "rising"
-      ? TrendingUp
-      : trend.direction === "falling"
-      ? TrendingDown
-      : Minus;
+    trend === "rising" ? TrendingUp : trend === "falling" ? TrendingDown : Minus;
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
       <Tile
         delay={0}
         icon={<Droplets className="h-4 w-4" aria-hidden="true" />}
-        title="Humidity"
-        hint={`Dew point ${formatTemp(dp, units)} · ${dewPointComfort(dp)}`}
+        title={t.common.humidity}
+        hint={h.dewPoint(formatTemp(dp, units), h.dewComfort[dewComfortLevel(dp)])}
         visual={
-          <RingGauge
-            value={weather.main.humidity}
-            color={accent}
-            label={`${weather.main.humidity}%`}
-          />
+          <RingGauge value={current.humidity} color={accent} label={`${current.humidity}%`} />
         }
       />
 
       <Tile
         delay={1}
         icon={<Wind className="h-4 w-4" aria-hidden="true" />}
-        title="Wind"
-        value={`${Math.round(convertSpeed(weather.wind.speed, units))} ${speedUnit(units)}`}
-        hint={`${windDirection(weather.wind.deg)} · ${windDescription(weather.wind.speed)}`}
-        visual={<CompassGauge degrees={weather.wind.deg} color={accent} />}
+        title={t.common.wind}
+        value={`${Math.round(convertSpeed(current.windSpeed, units))} ${speedUnit(units)}`}
+        hint={`${h.compass[compassIndex(current.windDir)]} · ${h.windLevels[windLevel(current.windSpeed)]}${
+          current.windGust !== null && current.windGust > current.windSpeed * 1.3
+            ? ` · ${t.common.gusts.toLowerCase()} ${Math.round(convertSpeed(current.windGust, units))}`
+            : ""
+        }`}
+        visual={<CompassGauge degrees={current.windDir} color={accent} />}
       />
 
       <Tile
         delay={2}
         icon={<Gauge className="h-4 w-4" aria-hidden="true" />}
-        title="Pressure"
+        title={h.pressure}
         hint={
           <span className="inline-flex items-center gap-1">
             <TrendIcon className="h-3 w-3" aria-hidden="true" />
-            {trend.label}
+            {h.trend[trend]}
           </span>
         }
         visual={
           <ArcGauge
-            value={weather.main.pressure}
+            value={current.pressure}
             min={960}
             max={1060}
             color={accent}
-            label={`${formatPressure(weather.main.pressure, units)} ${pressureUnit(units)}`}
+            label={`${formatPressure(current.pressure, units)} ${pressureUnit(units)}`}
           />
         }
       />
@@ -113,20 +110,20 @@ export default function HighlightsGrid({
       <Tile
         delay={3}
         icon={<Eye className="h-4 w-4" aria-hidden="true" />}
-        title="Visibility"
-        value={`${convertDistance(weather.visibility, units).toFixed(1)} ${distanceUnit(units)}`}
+        title={h.visibility}
+        value={
+          visibility === null
+            ? "—"
+            : `${convertDistance(visibility, units).toFixed(visibilityKm! >= 10 ? 0 : 1)} ${distanceUnit(units)}`
+        }
         hint={
-          visibilityKm >= 10
-            ? "Crystal clear"
-            : visibilityKm >= 4
-            ? "Fairly clear"
-            : visibilityKm >= 1
-            ? "Hazy"
-            : "Very poor"
+          visibilityKm === null
+            ? undefined
+            : h.visibilityLevels[visibilityKm >= 10 ? 3 : visibilityKm >= 4 ? 2 : visibilityKm >= 1 ? 1 : 0]
         }
         visual={
           <div className="text-slate-400 dark:text-slate-500">
-            <SegmentGauge ratio={visibilityKm / 10} color={accent} />
+            <SegmentGauge ratio={(visibilityKm ?? 0) / 20} color={accent} />
           </div>
         }
       />
@@ -134,42 +131,26 @@ export default function HighlightsGrid({
       <Tile
         delay={4}
         icon={<Cloud className="h-4 w-4" aria-hidden="true" />}
-        title="Cloud cover"
-        hint={
-          weather.clouds.all < 15
-            ? "Wide open sky"
-            : weather.clouds.all < 50
-            ? "Scattered clouds"
-            : weather.clouds.all < 85
-            ? "Mostly cloudy"
-            : "Fully overcast"
-        }
-        visual={
-          <RingGauge
-            value={weather.clouds.all}
-            color={accent}
-            label={`${weather.clouds.all}%`}
-          />
-        }
+        title={h.clouds}
+        hint={h.cloudLevels[clouds < 15 ? 0 : clouds < 50 ? 1 : clouds < 85 ? 2 : 3]}
+        visual={<RingGauge value={clouds} color={accent} label={`${clouds}%`} />}
       />
 
       <Tile
         delay={5}
         icon={<Sun className="h-4 w-4" aria-hidden="true" />}
-        title="Sun strength"
-        value={daylight.isDay ? `${sun.toFixed(1)} / 10` : "After dark"}
-        hint={
-          !daylight.isDay
-            ? "The sun is below the horizon"
-            : sun >= 7
-            ? "Strong — use sunscreen"
-            : sun >= 4
-            ? "Moderate exposure"
-            : "Low exposure"
+        title={t.common.uv}
+        value={
+          uv !== null
+            ? `${Math.round(uv)} · ${h.uvLevels[level]}`
+            : uvMax !== null
+              ? `${t.daily.uvMax} ${Math.round(uvMax)}`
+              : h.afterDark
         }
+        hint={uv !== null ? h.uvAdvice[level] : h.belowHorizon}
         visual={
           <div className="text-amber-400/60">
-            <SegmentGauge ratio={sun / 10} color="#f59e0b" />
+            <SegmentGauge ratio={Math.min(1, uvShown / 11)} color={UV_COLORS[level]} />
           </div>
         }
       />

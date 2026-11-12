@@ -44,37 +44,19 @@ export function formatPressure(hPa: number, units: UnitSystem): string {
   return units === "metric" ? String(Math.round(value)) : value.toFixed(2);
 }
 
-/** Compass point for a wind bearing in degrees. */
-export function windDirection(degrees: number): string {
-  const points = [
-    "N",
-    "NNE",
-    "NE",
-    "ENE",
-    "E",
-    "ESE",
-    "SE",
-    "SSE",
-    "S",
-    "SSW",
-    "SW",
-    "WSW",
-    "W",
-    "WNW",
-    "NW",
-    "NNW",
-  ];
-  return points[Math.round((((degrees % 360) + 360) % 360) / 22.5) % 16];
+/** 0-15 index into a 16-point compass rose (N, NNE, NE, …). */
+export function compassIndex(degrees: number): number {
+  return Math.round((((degrees % 360) + 360) % 360) / 22.5) % 16;
 }
 
-/** Beaufort-ish description so the wind number means something. */
-export function windDescription(metersPerSecond: number): string {
+/** 0 calm … 6 storm; the labels live in the dictionaries. */
+export function windLevel(metersPerSecond: number): number {
   const kmh = metersPerSecond * 3.6;
-  if (kmh < 1) return "Calm";
-  if (kmh < 12) return "Light breeze";
-  if (kmh < 29) return "Moderate breeze";
-  if (kmh < 50) return "Fresh wind";
-  if (kmh < 75) return "Strong wind";
-  if (kmh < 103) return "Gale";
-  return "Storm";
+  if (kmh < 1) return 0;
+  if (kmh < 12) return 1;
+  if (kmh < 29) return 2;
+  if (kmh < 50) return 3;
+  if (kmh < 75) return 4;
+  if (kmh < 103) return 5;
+  return 6;
 }

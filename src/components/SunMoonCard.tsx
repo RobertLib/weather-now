@@ -2,32 +2,39 @@
 
 import { useId } from "react";
 import { Moon, Sunrise, Sunset } from "lucide-react";
-import { CurrentWeather } from "@/types/weather";
 import { SkyTheme } from "@/lib/conditions";
-import { DaylightInfo, formatDuration, moonPhase } from "@/lib/astro";
-import { formatLocalTime } from "@/lib/datetime";
+import { DaylightInfo, moonPhase } from "@/lib/astro";
+import { formatDuration, formatTime } from "@/lib/datetime";
+import { useI18n } from "@/i18n/client";
 import Card from "./Card";
 
 interface SunMoonCardProps {
-  weather: CurrentWeather;
+  sunrise: number;
+  sunset: number;
+  /** Unix seconds used for the moon phase. */
+  time: number;
+  tz: string;
   daylight: DaylightInfo;
   theme: SkyTheme;
   delay?: number;
 }
 
 export default function SunMoonCard({
-  weather,
+  sunrise,
+  sunset,
+  time,
+  tz,
   daylight,
   theme,
   delay = 0,
 }: SunMoonCardProps) {
-  const tz = weather.timezone;
-  const moon = moonPhase(weather.dt);
+  const { t, locale } = useI18n();
+  const moon = moonPhase(time);
 
   return (
     <Card
-      title="Sun & moon"
-      subtitle={`${formatDuration(daylight.lengthMinutes)} of daylight`}
+      title={t.sun.title}
+      subtitle={t.sun.subtitle(formatDuration(daylight.lengthMinutes))}
       icon={<Sunrise className="h-4 w-4" aria-hidden="true" />}
       delay={delay}
     >
@@ -36,18 +43,18 @@ export default function SunMoonCard({
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Slot
           icon={<Sunrise className="h-4 w-4 text-amber-500" aria-hidden="true" />}
-          label="Sunrise"
-          value={formatLocalTime(weather.sys.sunrise, tz)}
+          label={t.common.sunrise}
+          value={formatTime(sunrise, tz, locale)}
         />
         <Slot
           icon={<Sunset className="h-4 w-4 text-orange-500" aria-hidden="true" />}
-          label="Sunset"
-          value={formatLocalTime(weather.sys.sunset, tz)}
+          label={t.common.sunset}
+          value={formatTime(sunset, tz, locale)}
         />
       </div>
 
       <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-        {daylight.nextEvent === "sunset" ? "Sunset" : "Sunrise"} in{" "}
+        {t.sun.next(daylight.nextEvent)}{" "}
         <span className="font-semibold text-slate-700 dark:text-slate-200">
           {formatDuration(daylight.minutesToNextEvent)}
         </span>
@@ -58,13 +65,11 @@ export default function SunMoonCard({
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-sm font-semibold">
             <Moon className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-            {moon.name}
+            {t.sun.moonPhases[moon.phase]}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {Math.round(moon.illumination * 100)}% illuminated ·{" "}
-            {moon.daysToFull === 0
-              ? "full tonight"
-              : `full moon in ${moon.daysToFull} days`}
+            {t.sun.illuminated(Math.round(moon.illumination * 100))} ·{" "}
+            {moon.daysToFull === 0 ? t.sun.fullTonight : t.sun.fullIn(moon.daysToFull)}
           </p>
         </div>
       </div>

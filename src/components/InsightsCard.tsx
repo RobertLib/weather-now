@@ -6,13 +6,13 @@ import {
   Lightbulb,
   Shirt,
   Snowflake,
-  Sparkles,
   Sun,
   Thermometer,
   Umbrella,
   Wind,
 } from "lucide-react";
 import { Insight, InsightTone } from "@/lib/insights";
+import { useI18n } from "@/i18n/client";
 import Card from "./Card";
 
 const ICONS = {
@@ -22,7 +22,6 @@ const ICONS = {
   wind: Wind,
   snow: Snowflake,
   thermometer: Thermometer,
-  sparkles: Sparkles,
   clock: Clock,
   droplets: Droplets,
 } as const;
@@ -40,12 +39,13 @@ interface InsightsCardProps {
 }
 
 export default function InsightsCard({ insights, delay = 0 }: InsightsCardProps) {
+  const { t } = useI18n();
   if (!insights.length) return null;
 
   return (
     <Card
-      title="What this means"
-      subtitle="Plain-language takeaways"
+      title={t.insights.title}
+      subtitle={t.insights.subtitle}
       icon={<Lightbulb className="h-4 w-4" aria-hidden="true" />}
       delay={delay}
     >

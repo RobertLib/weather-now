@@ -1,18 +1,21 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ForecastItem } from "@/types/weather";
+import { HourlyPoint } from "@/types/weather";
 import { SkyTheme } from "@/lib/conditions";
 import { UnitSystem, convertTemp, formatTemp } from "@/lib/units";
-import { formatLocalHour, formatLocalWeekday, localDayKey } from "@/lib/datetime";
+import { dayKey, formatHour, formatWeekday } from "@/lib/datetime";
+import { useI18n } from "@/i18n/client";
 
 const W = 760;
 const H = 260;
 const PAD = { top: 34, right: 26, bottom: 54, left: 26 };
 
 interface TempChartProps {
-  items: ForecastItem[];
-  tz: number;
+  items: HourlyPoint[];
+  tz: string;
+  /** Hours between plotted points; the strip keeps every hour, the chart thins them. */
+  step?: number;
   units: UnitSystem;
   theme: SkyTheme;
 }
@@ -21,15 +24,16 @@ interface TempChartProps {
  * Temperature curve with a "feels like" trace and precipitation-chance bars.
  * Hand-rolled SVG — no charting dependency.
  */
-export default function TempChart({ items, tz, units, theme }: TempChartProps) {
+export default function TempChart({ items, tz, units, theme, step: every = 2 }: TempChartProps) {
+  const { t, locale } = useI18n();
   const uid = useId().replace(/:/g, "");
   const [active, setActive] = useState<number | null>(null);
 
-  const points = items.slice(0, 14);
+  const points = items.filter((_, i) => i % every === 0).slice(0, 16);
   if (points.length < 2) return null;
 
-  const temps = points.map((p) => convertTemp(p.main.temp, units));
-  const feels = points.map((p) => convertTemp(p.main.feels_like, units));
+  const temps = points.map((p) => convertTemp(p.temp, units));
+  const feels = points.map((p) => convertTemp(p.feelsLike, units));
   const lo = Math.min(...temps, ...feels);
   const hi = Math.max(...temps, ...feels);
   const span = Math.max(4, hi - lo);
@@ -57,13 +61,11 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
           viewBox={`0 0 ${W} ${H}`}
           className="w-full"
           role="img"
-          aria-label={`Temperature trend from ${formatTemp(
-            Math.min(...points.map((p) => p.main.temp)),
-            units
-          )} to ${formatTemp(
-            Math.max(...points.map((p) => p.main.temp)),
-            units
-          )} over the next ${points.length * 3} hours`}
+          aria-label={t.chart.aria(
+            formatTemp(Math.min(...points.map((p) => p.temp)), units),
+            formatTemp(Math.max(...points.map((p) => p.temp)), units),
+            points.length * every
+          )}
           onPointerLeave={() => setActive(null)}
         >
           <defs>
@@ -81,10 +83,10 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
           {/* Day boundaries */}
           {points.map((p, i) => {
             if (i === 0) return null;
-            if (localDayKey(p.dt, tz) === localDayKey(points[i - 1].dt, tz))
+            if (dayKey(p.time, tz) === dayKey(points[i - 1].time, tz))
               return null;
             return (
-              <g key={`sep-${p.dt}`}>
+              <g key={`sep-${p.time}`}>
                 <line
                   x1={x(i) - step / 2}
                   y1={PAD.top - 14}
@@ -98,7 +100,7 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
                   y={PAD.top - 18}
                   className="fill-slate-500 text-[11px] font-semibold dark:fill-slate-400"
                 >
-                  {formatLocalWeekday(p.dt, tz, "short")}
+                  {formatWeekday(p.time, tz, locale, "short")}
                 </text>
               </g>
             );
@@ -109,7 +111,7 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
             const h = p.pop * 34;
             return (
               <rect
-                key={`pop-${p.dt}`}
+                key={`pop-${p.time}`}
                 x={x(i) - Math.min(13, step * 0.28)}
                 y={baseline + 24 - h}
                 width={Math.min(26, step * 0.56)}
@@ -150,7 +152,7 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
 
           {/* Points, labels, hit areas */}
           {points.map((p, i) => (
-            <g key={p.dt}>
+            <g key={p.time}>
               <circle
                 cx={x(i)}
                 cy={y(temps[i])}
@@ -175,7 +177,7 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
                 textAnchor="middle"
                 className="fill-slate-500 text-[11px] font-medium dark:fill-slate-400"
               >
-                {formatLocalHour(p.dt, tz)}
+                {formatHour(p.time, tz, locale)}
               </text>
               {p.pop >= 0.15 && (
                 <text
@@ -215,24 +217,24 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
               />
               <g
                 transform={`translate(${Math.min(
-                  W - 116,
-                  Math.max(8, x(active) - 58)
+                  W - 150,
+                  Math.max(8, x(active) - 75)
                 )} 2)`}
               >
                 <rect
-                  width="116"
+                  width="150"
                   height="26"
                   rx="8"
                   className="fill-slate-900/85 dark:fill-slate-100/90"
                 />
                 <text
-                  x="58"
+                  x="75"
                   y="17"
                   textAnchor="middle"
                   className="fill-white text-[11px] font-semibold dark:fill-slate-900"
                 >
-                  {formatLocalHour(points[active].dt, tz)} ·{" "}
-                  {Math.round(temps[active])}° · feels{" "}
+                  {formatHour(points[active].time, tz, locale)} ·{" "}
+                  {Math.round(temps[active])}° · {t.chart.feels}{" "}
                   {Math.round(feels[active])}°
                 </text>
               </g>
@@ -247,7 +249,7 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
             className="h-[3px] w-5 rounded-full"
             style={{ backgroundColor: theme.accent }}
           />
-          Temperature
+          {t.chart.temperature}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -256,11 +258,11 @@ export default function TempChart({ items, tz, units, theme }: TempChartProps) {
               backgroundImage: `repeating-linear-gradient(90deg, ${theme.accent} 0 4px, transparent 4px 8px)`,
             }}
           />
-          Feels like
+          {t.chart.feelsLike}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-[3px] bg-sky-400/70" />
-          Chance of precipitation
+          {t.chart.pop}
         </span>
       </div>
     </div>

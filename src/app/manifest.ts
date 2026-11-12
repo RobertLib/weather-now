@@ -3,10 +3,10 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "WeatherNow - Real-Time Weather Forecasts",
+    name: "WeatherNow — Weather Forecasts",
     short_name: "WeatherNow",
     description:
-      "Get accurate real-time weather forecasts, current conditions, and hourly predictions for any location worldwide.",
+      "Hourly and 14-day weather forecasts, air quality and climate averages for cities worldwide.",
     start_url: "/",
     display: "standalone",
     // Matches the app's sky backdrop so the PWA splash screen doesn't flash white.

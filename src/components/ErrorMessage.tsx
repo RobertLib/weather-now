@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, RotateCcw, X } from "lucide-react";
+import { useI18n } from "@/i18n/client";
 
 interface ErrorMessageProps {
   message: string;
@@ -13,6 +14,7 @@ export default function ErrorMessage({
   onClose,
   onRetry,
 }: ErrorMessageProps) {
+  const { t } = useI18n();
   return (
     <div
       role="alert"
@@ -30,13 +32,13 @@ export default function ErrorMessage({
           className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-600"
         >
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-          Retry
+          {t.common.retry}
         </button>
       )}
       <button
         type="button"
         onClick={onClose}
-        aria-label="Dismiss this message"
+        aria-label={t.common.dismiss}
         className="shrink-0 rounded-lg p-1 text-rose-500 transition-colors hover:bg-rose-500/15 hover:text-rose-700 dark:hover:text-rose-200"
       >
         <X className="h-4 w-4" aria-hidden="true" />

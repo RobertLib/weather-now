@@ -1,150 +1,100 @@
-# WeatherNow - Real-Time Weather Application
+# WeatherNow
 
-![WeatherNow](https://img.shields.io/badge/Weather-App-blue)
-![Next.js](https://img.shields.io/badge/Next.js-15.4.5-black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.0-38B2AC)
+Fast, ad-free weather forecasts for cities worldwide, in English and Czech: live
+conditions, hourly and 14-day forecasts, air quality and pollen, sunrise and
+sunset times, and monthly climate averages.
 
-WeatherNow is a modern, responsive weather application that provides accurate real-time weather forecasts, current conditions, and detailed predictions for any location worldwide.
+Live: <https://www.weather-now.app>
 
-## 🌟 Features
+## How the site is built
 
-- **Real-Time Weather Data**: Get current weather conditions including temperature, humidity, wind speed, and atmospheric pressure
-- **Hourly Forecasts**: View detailed hourly weather predictions for the next 48 hours
-- **7-Day Weather Outlook**: Plan ahead with comprehensive weekly forecasts
-- **Location Search**: Search for weather information in any city worldwide
-- **Geolocation Support**: Use your current location for instant weather updates
-- **Responsive Design**: Optimized for desktop, tablet, and mobile devices
-- **Accessibility**: Full WCAG compliance with screen reader support
-- **SEO Optimized**: Enhanced for search engine visibility and social sharing
+**Indexable pages per city.** Every curated city (`src/data/places.json`, ~440
+places) gets its own server-rendered pages, in both languages:
 
-## 🚀 SEO Features
+| View | English | Czech |
+| --- | --- | --- |
+| Overview | `/weather/czechia/prague` | `/cs/pocasi/cesko/praha` |
+| Tomorrow | `…/tomorrow` | `…/zitra` |
+| Hourly (48 h) | `…/hourly` | `…/po-hodinach` |
+| 14 days | `…/14-day` | `…/14-dni` |
+| Air quality and pollen | `…/air-quality` | `…/kvalita-vzduchu` |
+| Sunrise and sunset (30 days) | `…/sunrise-sunset` | `…/vychod-a-zapad-slunce` |
+| Climate by month | `…/climate`, `…/climate/november` | `…/podnebi`, `…/podnebi/listopad` |
 
-- **Structured Data**: JSON-LD markup for weather information and breadcrumbs
-- **Dynamic Meta Tags**: Location and weather-specific meta descriptions and titles
-- **Open Graph & Twitter Cards**: Optimized social media sharing
-- **Semantic HTML**: Proper heading hierarchy and semantic elements
-- **Sitemap & Robots.txt**: Automated generation for search engines
-- **Core Web Vitals**: Optimized for Google's page experience signals
-- **Progressive Web App**: Installable with app manifest
+Each country has a hub page (`/weather/czechia`) with current temperatures, and
+`/weather` lists all countries. All URLs are built in `src/lib/routes.ts`.
 
-## 🛠️ Technology Stack
+**Rendering.** City and country pages use ISR: they render on first request,
+are cached, and refresh at most hourly (`export const revalidate = 3600`).
+Forecast data is fetched on the server, so the HTML already contains the
+forecast, a generated summary paragraph and an FAQ. After hydration the
+dashboard calls Open-Meteo directly from the browser to stay fresh.
 
-- **Framework**: Next.js 15.4.5 (App Router)
-- **Language**: TypeScript 5+
-- **Styling**: TailwindCSS 4
-- **Icons**: Lucide React
-- **Weather API**: OpenWeatherMap
-- **Deployment**: Vercel
+**Languages.** English lives at the root and Czech under `/cs`, as two route
+groups with their own root layouts (`src/app/(en)`, `src/app/(cs)/cs`). Route
+files are thin wrappers around shared views in `src/views`. All UI text, the
+generated sentences and the FAQs live in `src/i18n/en.ts` and `src/i18n/cs.ts`.
 
-## 📦 Installation
+**SEO.**
+- Every page has a canonical URL and hreflang alternates (`src/lib/seo.ts`).
+- Pages carry JSON-LD: WebSite, BreadcrumbList, WebPage + City, FAQPage, and
+  Dataset on climate pages (`src/lib/schema.ts`).
+- A sitemap index at `/sitemap.xml` points to split sitemaps under
+  `/sitemaps/sitemap/{pages,en,cs}.xml`.
+- Internal links: the footer links to popular cities and countries, and each
+  city page links to the same view for its nearest cities.
 
-1. Clone the repository:
+**Widget.** `/widget` (and `/cs/widget`) generates an embed snippet: an iframe
+pointing to `/embed/{lang}/{country}/{city}` (noindex), followed by a visible
+credit link. Only that credit link outside the iframe counts as a backlink
+from the embedding site.
 
-```bash
-git clone https://github.com/RobertLib/weather-now.git
-cd weather-now
-```
+## Data
 
-2. Install dependencies:
+- **Forecasts, air quality, geocoding:** [Open-Meteo](https://open-meteo.com/)
+  (CC BY 4.0, no key needed). The free tier is non-commercial and rate-limited
+  (10,000 calls/day per IP; requests with many variables count as several
+  calls). Server requests are cached for an hour and shared by every page and
+  language of a city.
+- **Places:** `scripts/build-places.mjs` produces `src/data/places.json` and
+  `src/data/countries.json`. It starts from `scripts/seed-cities.json` plus an
+  extra list inside the script, resolves each place through the Open-Meteo
+  geocoding API (GeoNames), and adds English and Czech names and slugs.
+- **Climate normals (1991–2020):** `scripts/build-climate.mjs` produces
+  `src/data/climate.json`. Data comes from [Meteostat](https://meteostat.net/)
+  station normals (CC BY-NC 4.0, so non-commercial use only) where a suitable
+  station exists, and from [NASA POWER](https://power.larc.nasa.gov/) daily
+  data with a lapse-rate correction elsewhere. Each place records which source
+  it uses, and every climate page credits it.
+- **Sun and moon:** calculated astronomically (`src/lib/astro.ts`), with no API
+  calls.
+
+Regenerate the datasets with `npm run data`. A cold run takes about 20 minutes
+(mostly NASA POWER); downloads are cached in `$DATA_CACHE_DIR`, which defaults
+to `<os tmp>/weather-now-data-cache`. Keep URL slugs stable once pages are
+indexed.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OPEN_METEO_API_KEY` | no | Paid Open-Meteo key for server-side requests (customer endpoints with their own quota). Never exposed to the browser. |
+
+The old `NEXT_PUBLIC_OPENWEATHER_API_KEY` is no longer used and can be removed.
+
+## Development
 
 ```bash
 npm install
+npm run dev     # http://localhost:3000
+npm run build   # type-check and production build
+npm run lint
 ```
 
-3. Create a `.env.local` file and add your OpenWeatherMap API key:
+Homepage geolocation (`/api/locate`) reads Vercel's IP headers, so it only
+guesses a city when deployed on Vercel.
 
-```env
-NEXT_PUBLIC_OPENWEATHER_API_KEY=your_api_key_here
-```
+## Licence
 
-4. Run the development server:
-
-```bash
-npm run dev
-```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## 🔧 Configuration
-
-### Environment Variables
-
-- `NEXT_PUBLIC_OPENWEATHER_API_KEY`: Your OpenWeatherMap API key (required)
-
-### SEO Configuration
-
-The application includes comprehensive SEO configuration in:
-
-- `src/app/layout.tsx`: Global metadata and Open Graph settings
-- `src/lib/schema.ts`: Structured data generation
-- `src/app/sitemap.ts`: Automated sitemap generation
-- `src/app/robots.ts`: Search engine directives
-
-## 📊 Performance
-
-- **Lighthouse Score**: 100/100 for Performance, Accessibility, Best Practices, and SEO
-- **Core Web Vitals**: Optimized for LCP, FID, and CLS
-- **Bundle Size**: Optimized with Next.js automatic code splitting
-- **Image Optimization**: Next.js Image component for weather icons
-
-## 🎯 SEO Best Practices
-
-- **Title Tags**: Dynamic, descriptive titles with location and weather conditions
-- **Meta Descriptions**: Compelling descriptions with weather details and location
-- **Structured Data**: JSON-LD for weather information and organization data
-- **URL Structure**: Clean, semantic URLs
-- **Internal Linking**: Proper navigation and footer links
-- **Mobile-First**: Responsive design with mobile optimization
-- **Page Speed**: Optimized loading times and Core Web Vitals
-
-## 🌐 Deployment
-
-The application is optimized for deployment on Vercel:
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add your environment variables in Vercel dashboard
-4. Deploy automatically with each push
-
-## 📱 Progressive Web App
-
-WeatherNow includes PWA features:
-
-- App manifest for installation
-- App icons for various platforms
-- Standalone display mode
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Weather data provided by [OpenWeatherMap](https://openweathermap.org/)
-- Icons by [Lucide](https://lucide.dev/)
-- Built with [Next.js](https://nextjs.org/) and [TailwindCSS](https://tailwindcss.com/)
-- Created by [Robert Libsansky](https://github.com/RobertLib)
-
-## �‍💻 Author
-
-**Robert Libsansky**
-
-- GitHub: [@RobertLib](https://github.com/RobertLib)
-- Portfolio: [https://robertlib.github.io/roblib/]
-
-## 📞 Support
-
-For support, create an issue in this repository or contact the author directly through GitHub.
-
----
-
-Made with ❤️ by Robert Libsansky for weather enthusiasts worldwide
+MIT — see [LICENSE](LICENSE). Weather data © Open-Meteo.com (CC BY 4.0).
+Created by [Robert Libsansky](https://github.com/RobertLib).

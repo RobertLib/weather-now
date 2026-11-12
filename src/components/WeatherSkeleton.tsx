@@ -1,8 +1,8 @@
 /** Layout-matched placeholder shown while the first forecast loads. */
-export default function WeatherSkeleton() {
+export default function WeatherSkeleton({ label }: { label: string }) {
   return (
     <div className="space-y-4" role="status" aria-live="polite">
-      <span className="sr-only">Loading weather data…</span>
+      <span className="sr-only">{label}</span>
 
       <Shimmer className="h-56 rounded-3xl sm:h-64" />
 

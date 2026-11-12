@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Weather artwork is inline SVG now, so no remote image hosts are needed.
+  experimental: {
+    // Two root layouts (English and Czech trees) need a routing-level 404.
+    globalNotFound: true,
+  },
 };
 
 export default nextConfig;
