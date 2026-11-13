@@ -11,7 +11,7 @@ import {
   upcomingHours,
 } from "@/lib/openmeteo";
 import { conditionKind, skyTheme } from "@/lib/conditions";
-import { formatTemp } from "@/lib/units";
+import { formatSpeed, formatTemp, formatTempDelta } from "@/lib/units";
 import { daylightInfo } from "@/lib/astro";
 import { formatHour } from "@/lib/datetime";
 import { activityScores, buildInsights } from "@/lib/insights";
@@ -33,7 +33,8 @@ import ActivityCard from "./ActivityCard";
 import WeatherSkeleton from "./WeatherSkeleton";
 import ErrorMessage from "./ErrorMessage";
 import Panel from "./Panel";
-import { MAX_FAVORITES, favoriteId, useFavorites } from "./FavoritesBar";
+import { favoriteId } from "@/lib/favorites";
+import { MAX_FAVORITES, useFavorites } from "./FavoritesBar";
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 /** Server-rendered data older than this is refreshed right after hydration. */
@@ -161,8 +162,12 @@ export default function WeatherDashboard({
             hourly,
             today,
             forecast.timezone,
-            (unix) => formatHour(unix, forecast.timezone, locale),
-            (c) => formatTemp(c, units)
+            {
+              hour: (unix) => formatHour(unix, forecast.timezone, locale),
+              temp: (c) => formatTemp(c, units),
+              tempDelta: (c) => formatTempDelta(c, units),
+              speed: (ms) => formatSpeed(ms, units),
+            }
           )
         : [],
     [forecast, hourly, today, t, locale, units]

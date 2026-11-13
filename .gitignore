@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# downloads cached by scripts/build-*.mjs (DATA_CACHE_DIR)
+/.cache/
+
 # next.js
 /.next/
 /out/

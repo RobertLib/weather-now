@@ -12,6 +12,25 @@ const nextConfig: NextConfig = {
     // Two root layouts (English and Czech trees) need a routing-level 404.
     globalNotFound: true,
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Only the location button needs a device API.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+        ],
+      },
+      {
+        // Everything except the embeddable widget may only be framed by the
+        // site itself (clickjacking protection).
+        source: "/:path((?!embed/).*)",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

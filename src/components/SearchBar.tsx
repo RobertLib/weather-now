@@ -17,6 +17,7 @@ import {
 import { resolvePlaceHref } from "@/lib/navigation-client";
 import { POPULAR } from "@/lib/popular";
 import { useI18n } from "@/i18n/client";
+import ErrorMessage from "./ErrorMessage";
 
 /** One row in the dropdown: a curated city (with its page) or a geocoder hit. */
 interface Suggestion {
@@ -34,7 +35,7 @@ const POPULAR_SHOWN = 6;
 
 interface SearchBarProps {
   autoFocus?: boolean;
-  /** Surfaces geolocation failures to the page. */
+  /** Surfaces geolocation failures to the page; shown under the box otherwise. */
   onError?: (message: string) => void;
 }
 
@@ -51,6 +52,8 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [busy, setBusy] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const reportGeoError = (message: string) => (onError ? onError(message) : setGeoError(message));
 
   const term = query.trim();
   const searchable = term.length >= 2;
@@ -166,8 +169,9 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
   };
 
   const locate = () => {
+    setGeoError(null);
     if (!navigator.geolocation) {
-      onError?.(t.errors.geoUnsupported);
+      reportGeoError(t.errors.geoUnsupported);
       return;
     }
     setBusy(true);
@@ -182,7 +186,7 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
         setBusy(false);
       },
       () => {
-        onError?.(t.errors.geoFailed);
+        reportGeoError(t.errors.geoFailed);
         setBusy(false);
       },
       { timeout: 10_000 }
@@ -309,6 +313,12 @@ export default function SearchBar({ autoFocus = false, onError }: SearchBarProps
           </button>
         </div>
       </form>
+
+      {geoError && (
+        <div className="mt-2">
+          <ErrorMessage message={geoError} onClose={() => setGeoError(null)} />
+        </div>
+      )}
 
       {(showSuggestions || showPopular) && (
         <div className="glass animate-pop absolute inset-x-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-2xl p-1.5 shadow-2xl">

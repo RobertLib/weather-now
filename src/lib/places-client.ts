@@ -58,11 +58,22 @@ export function indexPlacePath(index: PlaceIndex, p: IndexPlace, locale: Locale)
   return `${worldPath(locale)}/${country[2 + L(locale)]}/${p[4 + L(locale)] as string}`;
 }
 
-function normalize(value: string): string {
+/** Letters that don't decompose into a base letter plus accent. */
+const SPECIAL_LETTERS: Record<string, string> = {
+  ł: "l", Ł: "L", đ: "d", Đ: "D", ø: "o", Ø: "O", æ: "ae", Æ: "AE", œ: "oe",
+  Œ: "OE", ß: "ss", þ: "th", Þ: "TH", ð: "d", Ð: "D", ı: "i", ħ: "h", Ħ: "H",
+};
+
+/**
+ * Lowercase with accents stripped, so "wroclaw" finds Wrocław and "tromso"
+ * Tromsø. Mirrors `fold` in scripts/lib/slugs.mjs (a test keeps them in sync).
+ */
+export function normalize(value: string): string {
   return value
-    .toLowerCase()
-    .normalize("NFD")
+    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦ]/g, (ch) => SPECIAL_LETTERS[ch])
+    .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
     .trim();
 }
 

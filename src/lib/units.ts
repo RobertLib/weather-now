@@ -13,6 +13,11 @@ export function formatTemp(celsius: number, units: UnitSystem): string {
   return `${Math.round(convertTemp(celsius, units))}°`;
 }
 
+/** A temperature *difference* (no 32° offset), e.g. a 10 °C swing is `18°` in °F. */
+export function formatTempDelta(celsius: number, units: UnitSystem): string {
+  return `${Math.round(units === "metric" ? celsius : celsius * (9 / 5))}°`;
+}
+
 export function convertSpeed(metersPerSecond: number, units: UnitSystem) {
   return units === "metric"
     ? metersPerSecond * 3.6
@@ -21,6 +26,11 @@ export function convertSpeed(metersPerSecond: number, units: UnitSystem) {
 
 export function speedUnit(units: UnitSystem): string {
   return units === "metric" ? "km/h" : "mph";
+}
+
+/** Rounded speed with its unit, e.g. `40 km/h` / `25 mph`. */
+export function formatSpeed(metersPerSecond: number, units: UnitSystem): string {
+  return `${Math.round(convertSpeed(metersPerSecond, units))} ${speedUnit(units)}`;
 }
 
 export function convertDistance(meters: number, units: UnitSystem) {

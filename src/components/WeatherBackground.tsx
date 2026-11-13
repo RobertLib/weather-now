@@ -8,7 +8,9 @@ import { SkyTheme, skyGradient } from "@/lib/conditions";
  */
 function rand(seed: number): number {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
-  return x - Math.floor(x);
+  // Math.sin may differ in the last bits between JS engines (server V8 vs the
+  // visitor's browser); rounding keeps the printed style values identical.
+  return Math.round((x - Math.floor(x)) * 1e4) / 1e4;
 }
 
 interface WeatherBackgroundProps {

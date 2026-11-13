@@ -2,9 +2,10 @@ import Link from "next/link";
 import { MapPin, Code2 } from "lucide-react";
 import { Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
-import { Country, Place, nearbyPlaces, getCountry } from "@/lib/places";
+import { Country, Place, nearbyPlaces, getCountry, placeRegion } from "@/lib/places";
 import { CityView, CITY_VIEWS, countryPath, homePath, pagePath, placePath, worldPath } from "@/lib/routes";
 import { DEFAULT_THEME, SkyTheme } from "@/lib/conditions";
+import { favoriteId } from "@/lib/favorites";
 import { Crumb } from "@/lib/schema";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import WeatherBackground from "@/components/WeatherBackground";
@@ -62,7 +63,7 @@ export function CityFrame({
 }: CityFrameProps) {
   const t = getDictionary(locale);
   const views = CITY_VIEWS.filter((v) => v !== "climate" || hasClimate);
-  const region = place.a1?.[locale];
+  const region = placeRegion(place, locale);
 
   return (
     <>
@@ -96,7 +97,7 @@ export function CityFrame({
           </div>
 
           <SearchBar />
-          <FavoritesBar />
+          <FavoritesBar activeId={favoriteId(place.lat, place.lon)} />
 
           <nav aria-label={t.city.tabsAria} className="scroll-strip -mx-3 scroll-px-3 px-3 sm:mx-0 sm:scroll-px-0 sm:px-0">
             <ul className="flex gap-1.5">

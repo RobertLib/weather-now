@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -31,13 +31,7 @@ export function useTheme() {
     return () => media.removeEventListener("change", onChange);
   }, [preference, hydrated]);
 
-  const cycle = useCallback(() => {
-    setPreference((current) =>
-      current === "system" ? "light" : current === "light" ? "dark" : "system"
-    );
-  }, [setPreference]);
-
-  return { preference, setPreference, cycle };
+  return { preference, setPreference };
 }
 
 /**

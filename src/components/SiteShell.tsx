@@ -1,4 +1,3 @@
-import { Analytics } from "@vercel/analytics/next";
 import { Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { I18nProvider } from "@/i18n/client";
@@ -8,6 +7,8 @@ import { geistSans, outfit } from "@/app/fonts";
 import Navigation from "./Navigation";
 import Footer from "./Footer";
 import JsonLd from "./JsonLd";
+import SiteAnalytics from "./SiteAnalytics";
+import WeatherIconDefs from "./WeatherIconDefs";
 import "@/app/globals.css";
 
 /** The `<html>` frame shared by both language trees (each has its own root layout). */
@@ -24,6 +25,7 @@ export default function SiteShell({ locale, children }: { locale: Locale; childr
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
       <body className={`${geistSans.variable} ${outfit.variable} antialiased`}>
+        <WeatherIconDefs />
         <I18nProvider locale={locale}>
           <JsonLd data={websiteSchema(t.meta.siteName, t.meta.description, locale)} />
           <div className="flex min-h-screen flex-col font-sans">
@@ -32,7 +34,7 @@ export default function SiteShell({ locale, children }: { locale: Locale; childr
             <Footer locale={locale} />
           </div>
         </I18nProvider>
-        <Analytics />
+        <SiteAnalytics />
       </body>
     </html>
   );

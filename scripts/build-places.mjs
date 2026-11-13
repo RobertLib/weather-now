@@ -11,21 +11,19 @@
  * Usage:
  *   DATA_CACHE_DIR=/path/to/cache node scripts/build-places.mjs
  *
- * Every HTTP response is cached in DATA_CACHE_DIR (default: <tmp>/weather-now-data-cache),
- * so re-runs are offline and an interrupted run resumes where it stopped.
+ * Every HTTP response is cached in DATA_CACHE_DIR (default: <repo>/.cache/data, which
+ * is git-ignored and survives reboots, unlike the OS temp folder), so re-runs are
+ * offline, an interrupted run resumes where it stopped, and GeoNames ids stay stable.
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assignCountrySlugs, assignPlaceSlugs, slugify } from "./lib/slugs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CACHE_DIR = path.resolve(
-  process.env.DATA_CACHE_DIR ?? path.join(os.tmpdir(), "weather-now-data-cache")
-);
+const CACHE_DIR = path.resolve(process.env.DATA_CACHE_DIR ?? path.join(ROOT, ".cache", "data"));
 const OUT_DIR = path.join(ROOT, "src", "data");
 
 const GEOCODE = "https://geocoding-api.open-meteo.com/v1/search";
@@ -171,9 +169,15 @@ const QUERY_ALIASES = {
  * Filled in after reviewing the generated names (see the run log).
  */
 const OVERRIDES = {
-  // Not populated places in GeoNames (island / state).
+  // Not populated places in GeoNames (island / state). Their seed coordinates
+  // point at the main town (Denpasar, Panaji), not the geographic centre, so
+  // the forecast and climate describe where visitors actually stay.
   "ID:Bali": { a1: { en: "Bali", cs: "Bali" } },
   "IN:Goa": { a1: { en: "Goa", cs: "Goa" } },
+  // GeoNames puts Funchal 1.8 km inland at 280 m; the town centre is by the sea.
+  "PT:Funchal": { lat: 32.6488, lon: -16.9083, ele: 25 },
+  // GeoNames lists Hanoi under Asia/Bangkok (same offset, wrong zone).
+  "VN:Hanoi": { tz: "Asia/Ho_Chi_Minh" },
   // GeoNames has no (or a non-Czech) Czech name.
   "BG:Sofia": { cs: "Sofie" },
   "BG:Sunny Beach": { cs: "Slunečné pobřeží" },
@@ -224,6 +228,13 @@ const A1_FIXES = {
   "CZ|Zlín": ["Zlín Region", "Zlínský kraj"],
   "CZ|Moravian-Silesian Region": [null, "Moravskoslezský kraj"],
   "SK|Trenčín Region": [null, "Trenčínský kraj"],
+  // Plain English names, like "Bavaria" or "Tyrol"
+  "AT|State of Salzburg": ["Salzburg", null],
+  "AT|State of Vienna": ["Vienna", null],
+  "CH|Canton of Bern": ["Bern", null],
+  "CH|Canton of Geneva": ["Geneva", null],
+  "CH|Canton of Zurich": ["Zurich", null],
+  "DE|State of Berlin": ["Berlin", null],
   // Elsewhere
   "AE|Dubai": [null, "Dubaj"],
   "AR|Buenos Aires F.D.": ["Buenos Aires", "Buenos Aires"],
@@ -244,6 +255,7 @@ const A1_FIXES = {
   "CO|Departamento de Bolívar": ["Bolívar", "Bolívar"],
   "CR|Provincia de San José": ["San José Province", "San José"],
   "CU|Havana": [null, "Havana"],
+  "CY|Larnaka": ["Larnaca", null],
   "CY|Pafos": ["Paphos", "Pafos"],
   "DK|Capital Region": ["Capital Region of Denmark", "Hlavní region"],
   "DO|La Altagracia Province": [null, "La Altagracia"],
@@ -268,6 +280,7 @@ const A1_FIXES = {
   "HR|Istria County": [null, "Istrijská župa"],
   "HR|Split-Dalmatia County": [null, "Splitsko-dalmatská župa"],
   "HR|Zadar County": [null, "Zadarská župa"],
+  "HU|Budapest": [null, "Budapešť"],
   "ID|Jakarta Special Capital Region": ["Jakarta", "Jakarta"],
   "IN|National Capital Territory of Delhi": ["Delhi", "Dillí"],
   "IS|Capital Region": [null, "Hlavní region"],
@@ -295,6 +308,7 @@ const A1_FIXES = {
   "PA|Provincia de Panamá": ["Panamá Province", "Panama"],
   "PE|Lima Province": [null, "Lima"],
   "PH|National Capital Region": ["Metro Manila", "Metro Manila"],
+  "PK|Islamabad": [null, "Islámábád"],
   "PT|Faro District": [null, "Faro"],
   "PT|Porto District": [null, "Porto"],
   "PY|Asuncion": ["Asunción", null],
@@ -308,6 +322,8 @@ const A1_FIXES = {
   "SI|Ljubljana": [null, "Lublaň"],
   "TN|Nabeul Governorate": [null, "Nabul"],
   "TN|Sousse Governorate": [null, "Súsa"],
+  // Same spelling as the city itself.
+  "TH|Chiang Mai": [null, "Chiang Mai"],
   "TW|Taiwan": [null, "Tchaj-wan"],
   "TZ|Dar es Salaam Region": [null, "Dar es Salaam"],
   "TZ|Zanzibar Urban/West": [null, "Zanzibar"],
@@ -413,9 +429,13 @@ async function cachedJson(url) {
   }
 }
 
-const geocode = (name, language) =>
+/**
+ * Restricted to the expected country, so a common name ("Most", "Martin") can't
+ * push the intended town out of the first results.
+ */
+const geocode = (name, language, cc) =>
   cachedJson(
-    `${GEOCODE}?name=${encodeURIComponent(name)}&count=10&language=${language}&format=json`
+    `${GEOCODE}?name=${encodeURIComponent(name)}&count=10&language=${language}&countryCode=${cc}&format=json`
   ).then((data) => data.results ?? []);
 
 const sameName = (a, b) => slugify(a) === slugify(b);
@@ -538,7 +558,7 @@ async function resolve(entry) {
   let via = entry.id ? { query: "(fixed id)", language: "en", strict: true } : null;
   for (const strict of hit ? [] : entry.lat === undefined ? [true] : [true, false]) {
     for (const [query, language] of queries) {
-      const results = await geocode(query, language);
+      const results = await geocode(query, language, entry.cc);
       seen.push(...results);
       hit = pick(results, entry, query, strict);
       if (hit) {
@@ -578,7 +598,7 @@ async function resolve(entry) {
     };
   }
 
-  if (via.language !== "en" || via.query !== entry.q || !via.strict) {
+  if (!entry.id && (via.language !== "en" || via.query !== entry.q || !via.strict)) {
     note(`${label}: matched via ${via.strict ? "" : "non-strict "}${via.language} query "${via.query}" → "${hit.name}" #${hit.id}`);
   }
   if (hit._distance > 15) {
@@ -627,7 +647,7 @@ async function readPublishedSlugs() {
   const places = await read("places.json", []);
   const countries = await read("countries.json", {});
   return {
-    places: new Map(places.map((p) => [p.id, p.slug])),
+    places: new Map(places.map((p) => [p.id, { ...p.slug, cc: p.cc }])),
     countries: new Map(Object.entries(countries).map(([cc, c]) => [cc, c.slug])),
   };
 }
@@ -690,10 +710,15 @@ async function main() {
         slug: { en: p.slug.en, cs: p.slug.cs },
       };
       if (p.a1?.en) out.a1 = { en: p.a1.en, cs: p.a1.cs ?? p.a1.en };
+      // A missing elevation would silently become 0 m and skew the climate
+      // lapse-rate correction and station choice.
+      if (typeof p.ele !== "number" || !Number.isFinite(p.ele)) {
+        throw new Error(`${p.en} (${p.cc}): no elevation from GeoNames or the forecast API`);
+      }
       Object.assign(out, {
         lat: round(p.lat, 4),
         lon: round(p.lon, 4),
-        ele: Math.round(p.ele ?? 0),
+        ele: Math.round(p.ele),
         tz: p.tz,
         pop: p.pop ?? 0,
       });

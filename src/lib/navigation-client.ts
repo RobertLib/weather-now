@@ -6,6 +6,10 @@ import { findIndexPlace, indexPlacePath, loadPlaceIndex, nearestIndexPlace } fro
  * Where a picked location should take the visitor: its canonical city page
  * when we have one (same GeoNames id, or a curated city within 10 km),
  * otherwise the homepage dashboard with coordinates in the query string.
+ *
+ * Those coordinates are rounded to two decimals (about 1 km): the URL ends up
+ * in browser history, shared links and server logs, and a device's precise
+ * GPS fix doesn't belong there. Forecast grids are coarser anyway.
  */
 export async function resolvePlaceHref(
   locale: Locale,
@@ -21,8 +25,8 @@ export async function resolvePlaceHref(
     /* index unavailable — fall back to coordinates */
   }
   const params = new URLSearchParams({
-    lat: loc.lat.toFixed(4),
-    lon: loc.lon.toFixed(4),
+    lat: loc.lat.toFixed(2),
+    lon: loc.lon.toFixed(2),
   });
   if (loc.name) params.set("name", loc.name);
   if (loc.cc) params.set("cc", loc.cc);

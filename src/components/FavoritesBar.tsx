@@ -23,21 +23,21 @@ export function useFavorites() {
   return useLocalStorage<StoredCity[]>(FAVORITES_KEY, []);
 }
 
-export function favoriteId(lat: number, lon: number): string {
-  return `${lat.toFixed(2)},${lon.toFixed(2)}`;
-}
-
 function hrefFor(city: StoredCity, base: string): string {
   if (city.path) return city.path;
+  // Same ~1 km rounding as `resolvePlaceHref`; older saves may be more precise.
   const params = new URLSearchParams({
-    lat: String(city.lat),
-    lon: String(city.lon),
+    lat: city.lat.toFixed(2),
+    lon: city.lon.toFixed(2),
     name: city.name,
   });
   return `${base}?${params}`;
 }
 
-/** Saved places with live temperatures, fetched in one batched request. */
+/**
+ * Saved places with live temperatures, fetched in one batched request.
+ * `activeId` (see `favoriteId`) highlights the place being viewed.
+ */
 export default function FavoritesBar({ activeId }: { activeId?: string | null }) {
   const { t, locale } = useI18n();
   const [cities, setCities] = useFavorites();

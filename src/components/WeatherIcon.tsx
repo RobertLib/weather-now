@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { ConditionKind, conditionKind } from "@/lib/conditions";
+import { ICON_GRADIENT } from "./WeatherIconDefs";
 
 interface WeatherIconProps {
   /** WMO weather code. */
@@ -17,6 +18,7 @@ interface WeatherIconProps {
 /**
  * Hand-drawn animated weather glyphs. Replaces the bitmap icons weather
  * services usually serve so the artwork scales, matches the palette and moves a little.
+ * The gradients live in `WeatherIconDefs`, which every root layout renders once.
  */
 export default function WeatherIcon({
   code,
@@ -36,34 +38,6 @@ export default function WeatherIcon({
       aria-label={title}
       aria-hidden={title ? undefined : true}
     >
-      <defs>
-        <linearGradient id={`${uid}-sun`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#fef08a" />
-          <stop offset="55%" stopColor="#fbbf24" />
-          <stop offset="100%" stopColor="#f97316" />
-        </linearGradient>
-        <linearGradient id={`${uid}-moon`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f8fafc" />
-          <stop offset="100%" stopColor="#cbd5e1" />
-        </linearGradient>
-        <linearGradient id={`${uid}-cloud`} x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#cbd5e1" />
-        </linearGradient>
-        <linearGradient id={`${uid}-cloud-dark`} x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%" stopColor="#cbd5e1" />
-          <stop offset="100%" stopColor="#64748b" />
-        </linearGradient>
-        <linearGradient id={`${uid}-drop`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7dd3fc" />
-          <stop offset="100%" stopColor="#0284c7" />
-        </linearGradient>
-        <radialGradient id={`${uid}-glow`}>
-          <stop offset="0%" stopColor="#fde68a" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#fde68a" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
       {renderScene(kind, night, uid, animated)}
     </svg>
   );
@@ -87,8 +61,8 @@ function renderScene(
         </g>
       ) : (
         <g>
-          <circle cx="32" cy="32" r="22" fill={`url(#${uid}-glow)`} />
-          <Sun uid={uid} cx={32} cy={32} r={12} spinClass={spin} />
+          <circle cx="32" cy="32" r="22" fill={`url(#${ICON_GRADIENT.glow})`} />
+          <Sun cx={32} cy={32} r={12} spinClass={spin} />
         </g>
       );
 
@@ -97,28 +71,28 @@ function renderScene(
         <g>
           <Moon uid={uid} cx={39} cy={22} r={11} className={bob} />
           <Stars uid={uid} animated={animated} compact />
-          <Cloud uid={uid} x={8} y={28} scale={0.92} dark />
+          <Cloud x={8} y={28} scale={0.92} dark />
         </g>
       ) : (
         <g>
-          <circle cx="40" cy="22" r="16" fill={`url(#${uid}-glow)`} />
-          <Sun uid={uid} cx={40} cy={22} r={9.5} spinClass={spin} />
-          <Cloud uid={uid} x={7} y={28} scale={0.95} />
+          <circle cx="40" cy="22" r="16" fill={`url(#${ICON_GRADIENT.glow})`} />
+          <Sun cx={40} cy={22} r={9.5} spinClass={spin} />
+          <Cloud x={7} y={28} scale={0.95} />
         </g>
       );
 
     case "clouds":
       return (
         <g>
-          <Cloud uid={uid} x={16} y={17} scale={0.62} dark opacity={0.75} />
-          <Cloud uid={uid} x={5} y={27} scale={1.02} />
+          <Cloud x={16} y={17} scale={0.62} dark opacity={0.75} />
+          <Cloud x={5} y={27} scale={1.02} />
         </g>
       );
 
     case "fog":
       return (
         <g>
-          <Cloud uid={uid} x={6} y={17} scale={0.95} opacity={0.85} />
+          <Cloud x={6} y={17} scale={0.95} opacity={0.85} />
           {[0, 1, 2].map((i) => (
             <rect
               key={i}
@@ -140,11 +114,11 @@ function renderScene(
     case "rain":
       return (
         <g>
-          <Cloud uid={uid} x={5} y={16} scale={1} dark={kind === "rain"} />
+          <Cloud x={5} y={16} scale={1} dark={kind === "rain"} />
           {(kind === "rain" ? [0, 1, 2, 3] : [0, 1, 2]).map((i, _, arr) => (
             <Drop
               key={i}
-              uid={uid}
+             
               x={16 + i * (36 / Math.max(1, arr.length - 1))}
               delay={i * 0.22}
               animated={animated}
@@ -157,7 +131,7 @@ function renderScene(
     case "thunder":
       return (
         <g>
-          <Cloud uid={uid} x={5} y={14} scale={1} dark />
+          <Cloud x={5} y={14} scale={1} dark />
           <path
             d="M33 36 L25 50 h6 l-3 11 12-16 h-7 l4-9 z"
             fill="#facc15"
@@ -166,15 +140,15 @@ function renderScene(
             className={animated ? "animate-flash" : ""}
             style={{ animationDuration: "3.2s" }}
           />
-          <Drop uid={uid} x={15} delay={0.1} animated={animated} long />
-          <Drop uid={uid} x={49} delay={0.45} animated={animated} long />
+          <Drop x={15} delay={0.1} animated={animated} long />
+          <Drop x={49} delay={0.45} animated={animated} long />
         </g>
       );
 
     case "snow":
       return (
         <g>
-          <Cloud uid={uid} x={5} y={16} scale={1} />
+          <Cloud x={5} y={16} scale={1} />
           {[0, 1, 2].map((i) => (
             <g
               key={i}
@@ -194,13 +168,11 @@ function renderScene(
 }
 
 function Sun({
-  uid,
   cx,
   cy,
   r,
   spinClass,
 }: {
-  uid: string;
   cx: number;
   cy: number;
   r: number;
@@ -211,7 +183,7 @@ function Sun({
       <g
         className={spinClass}
         style={{ transformOrigin: `${cx}px ${cy}px` }}
-        stroke={`url(#${uid}-sun)`}
+        stroke={`url(#${ICON_GRADIENT.sun})`}
         strokeWidth="2.6"
         strokeLinecap="round"
       >
@@ -230,7 +202,7 @@ function Sun({
           );
         })}
       </g>
-      <circle cx={cx} cy={cy} r={r} fill={`url(#${uid}-sun)`} />
+      <circle cx={cx} cy={cy} r={r} fill={`url(#${ICON_GRADIENT.sun})`} />
     </g>
   );
 }
@@ -260,7 +232,7 @@ function Moon({
         cx={cx}
         cy={cy}
         r={r}
-        fill={`url(#${uid}-moon)`}
+        fill={`url(#${ICON_GRADIENT.moon})`}
         mask={`url(#${mask})`}
       />
     </g>
@@ -305,14 +277,12 @@ function Stars({
 }
 
 function Cloud({
-  uid,
   x,
   y,
   scale = 1,
   dark = false,
   opacity = 1,
 }: {
-  uid: string;
   x: number;
   y: number;
   scale?: number;
@@ -323,20 +293,18 @@ function Cloud({
     <g transform={`translate(${x} ${y}) scale(${scale})`} opacity={opacity}>
       <path
         d="M12 26 a10 10 0 0 1 1.4 -19.9 a13 13 0 0 1 24.3 3.2 a8.6 8.6 0 0 1 -1.7 16.7 z"
-        fill={`url(#${uid}-cloud${dark ? "-dark" : ""})`}
+        fill={`url(#${dark ? ICON_GRADIENT.cloudDark : ICON_GRADIENT.cloud})`}
       />
     </g>
   );
 }
 
 function Drop({
-  uid,
   x,
   delay,
   animated,
   long = false,
 }: {
-  uid: string;
   x: number;
   delay: number;
   animated: boolean;
@@ -357,7 +325,7 @@ function Drop({
             ? `M${x} 40 q2.6 5.2 0 8.4 q-2.6 -3.2 0 -8.4 z`
             : `M${x} 41 q2.2 4 0 6.4 q-2.2 -2.4 0 -6.4 z`
         }
-        fill={`url(#${uid}-drop)`}
+        fill={`url(#${ICON_GRADIENT.drop})`}
       />
       <path
         d={
@@ -365,7 +333,7 @@ function Drop({
             ? `M${x} 51 q2.2 4.4 0 7.1 q-2.2 -2.7 0 -7.1 z`
             : `M${x} 51 q1.8 3.4 0 5.4 q-1.8 -2 0 -5.4 z`
         }
-        fill={`url(#${uid}-drop)`}
+        fill={`url(#${ICON_GRADIENT.drop})`}
         opacity="0.6"
       />
     </g>

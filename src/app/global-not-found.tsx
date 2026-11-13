@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/routes";
 import SiteShell from "@/components/SiteShell";
 import NotFoundView from "@/views/NotFoundView";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.weather-now.app"),
+  metadataBase: new URL(SITE_URL),
   title: "404 — WeatherNow",
   robots: { index: false },
 };

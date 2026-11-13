@@ -41,7 +41,6 @@ export default function WeeklyForecast({ days, hourly, tz, units, theme }: Weekl
         const left = ((day.tempMin - weekMin) / weekSpan) * 100;
         const width = ((day.tempMax - day.tempMin) / weekSpan) * 100;
         const condition = describe(t, day.code);
-        const pop = day.pop ?? 0;
         const hours = isOpen
           ? hourly.filter((h) => dayKey(h.time, tz) === day.date && isThreeHourSlot(h.time, tz))
           : [];
@@ -81,7 +80,7 @@ export default function WeeklyForecast({ days, hourly, tz, units, theme }: Weekl
                 <p className="tabular flex items-center gap-3 text-[0.7rem] text-slate-500 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1">
                     <Droplets className="h-3 w-3" aria-hidden="true" />
-                    {Math.round(pop * 100)}%
+                    {day.pop === null ? "—" : `${Math.round(day.pop * 100)}%`}
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <Wind className="h-3 w-3" aria-hidden="true" />

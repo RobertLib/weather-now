@@ -1,7 +1,7 @@
 import { CurrentConditions, DailyPoint, HourlyPoint } from "@/types/weather";
 import { Dictionary } from "@/i18n";
 import { conditionKind, isWet } from "@/lib/conditions";
-import { wearTier } from "@/lib/climate";
+import { wearTier } from "@/lib/wear";
 import { hourOfDay } from "@/lib/datetime";
 
 export type InsightTone = "good" | "info" | "warn" | "alert";
@@ -22,9 +22,21 @@ export interface Insight {
   tone: InsightTone;
 }
 
+/** Formatters in the visitor's language and unit system. */
+export interface InsightFormat {
+  hour: (unix: number) => string;
+  /** A temperature, °C in. */
+  temp: (c: number) => string;
+  /** A temperature difference, °C in. */
+  tempDelta: (c: number) => string;
+  /** A speed, m/s in. */
+  speed: (ms: number) => string;
+}
+
 /**
  * A small set of human-readable takeaways. These are heuristics meant to make
- * the numbers actionable, not meteorological advice.
+ * the numbers actionable, not meteorological advice. Thresholds are metric;
+ * every number shown goes through `fmt`, so it follows the unit toggle.
  */
 export function buildInsights(
   t: Dictionary,
@@ -32,8 +44,7 @@ export function buildInsights(
   hourly: HourlyPoint[],
   today: DailyPoint | undefined,
   tz: string,
-  formatHour: (unix: number) => string,
-  formatTemp: (c: number) => string
+  fmt: InsightFormat
 ): Insight[] {
   const insights: Insight[] = [];
   const feels = current.feelsLike;
@@ -43,7 +54,7 @@ export function buildInsights(
   insights.push({
     id: "wear",
     icon: "shirt",
-    title: t.insights.feelsTitle(formatTemp(feels)),
+    title: t.insights.feelsTitle(fmt.temp(feels)),
     text: t.insights.wear[wearTier(feels)],
     tone: feels <= 0 || feels >= 30 ? "warn" : "good",
   });
@@ -57,7 +68,7 @@ export function buildInsights(
       id: "rain",
       icon: "umbrella",
       title: t.insights.umbrellaTitle,
-      text: t.insights.umbrellaText(wettest.pop, formatHour(wettest.time)),
+      text: t.insights.umbrellaText(wettest.pop, fmt.hour(wettest.time)),
       tone: wettest.pop >= 0.6 ? "alert" : "warn",
     });
   } else if (!isWet(current.code)) {
@@ -70,14 +81,15 @@ export function buildInsights(
     });
   }
 
-  const gust = (current.windGust ?? current.windSpeed) * 3.6;
-  if (gust >= 40) {
+  const gust = current.windGust ?? current.windSpeed;
+  const gustKmh = gust * 3.6;
+  if (gustKmh >= 40) {
     insights.push({
       id: "wind",
       icon: "wind",
       title: t.insights.windTitle,
-      text: t.insights.windText(Math.round(gust)),
-      tone: gust >= 65 ? "alert" : "warn",
+      text: t.insights.windText(fmt.speed(gust)),
+      tone: gustKmh >= 65 ? "alert" : "warn",
     });
   }
 
@@ -106,8 +118,8 @@ export function buildInsights(
     insights.push({
       id: "best-hour",
       icon: "clock",
-      title: t.insights.bestTitle(formatHour(best.time)),
-      text: t.insights.bestText(formatTemp(best.temp), best.pop),
+      title: t.insights.bestTitle(fmt.hour(best.time)),
+      text: t.insights.bestText(fmt.temp(best.temp), best.pop),
       tone: "info",
     });
   }
@@ -120,7 +132,7 @@ export function buildInsights(
         id: "swing",
         icon: "thermometer",
         title: t.insights.swingTitle,
-        text: t.insights.swingText(Math.round(swing)),
+        text: t.insights.swingText(fmt.tempDelta(swing)),
         tone: "info",
       });
     }

@@ -95,10 +95,16 @@ const OBLIQUITY = RAD * 23.4397;
 const toDays = (ms: number) => ms / DAY_MS - 0.5 + J1970 - J2000;
 const fromJulian = (j: number) => (j + 0.5 - J1970) * DAY_MS;
 const meanAnomaly = (d: number) => RAD * (357.5291 + 0.98560028 * d);
-const eclipticLongitude = (m: number) =>
+/**
+ * Sun's ecliptic longitude `d` days after J2000. SunCalc keeps the perihelion
+ * fixed at its J2000 value; it actually advances 1.72° a century, which by the
+ * 2020s shifts the longitude by almost half a degree (minutes on sunrise times
+ * near the equinoxes, hours on the solstice instants).
+ */
+const eclipticLongitude = (m: number, d: number) =>
   m +
   RAD * (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m)) +
-  RAD * 102.9372 +
+  RAD * (102.9372 + 0.0000470935 * d) +
   Math.PI;
 const approxTransit = (ht: number, lw: number, n: number) => J0 + (ht + lw) / (2 * Math.PI) + n;
 const solarTransit = (ds: number, m: number, l: number) =>
@@ -124,7 +130,7 @@ export function sunTimes(middayUtcMs: number, lat: number, lon: number): SunTime
   const n = Math.round(d - J0 - lw / (2 * Math.PI));
   const ds = approxTransit(0, lw, n);
   const m = meanAnomaly(ds);
-  const l = eclipticLongitude(m);
+  const l = eclipticLongitude(m, ds);
   const dec = Math.asin(Math.sin(OBLIQUITY) * Math.sin(l));
   const jNoon = solarTransit(ds, m, l);
   const h0 = -0.833 * RAD;
@@ -140,6 +146,42 @@ export function sunTimes(middayUtcMs: number, lat: number, lon: number): SunTime
   const sunrise = Math.round(fromJulian(jRise) / 1000);
   const sunset = Math.round(fromJulian(jSet) / 1000);
   return { sunrise, sunset, noon, daylight: Math.round((sunset - sunrise) / 60) };
+}
+
+/* ------------------------------------------------------------ solstices */
+
+/**
+ * Apparent solar longitude in radians (Meeus, *Astronomical Algorithms*,
+ * ch. 25, low accuracy: about 0.01°, i.e. the solstice to within ~15 minutes).
+ */
+function apparentSolarLongitude(unixSeconds: number): number {
+  const t = (unixSeconds / 86_400 + J1970 - 0.5 - J2000) / 36_525;
+  const l0 = 280.46646 + 36_000.76983 * t + 0.0003032 * t * t;
+  const m = RAD * (357.52911 + 35_999.05029 * t - 0.0001537 * t * t);
+  const c =
+    (1.914602 - 0.004817 * t - 0.000014 * t * t) * Math.sin(m) +
+    (0.019993 - 0.000101 * t) * Math.sin(2 * m) +
+    0.000289 * Math.sin(3 * m);
+  const omega = RAD * (125.04 - 1934.136 * t);
+  return RAD * (l0 + c - 0.00569 - 0.00478 * Math.sin(omega));
+}
+
+/** Instant (unix seconds) of the June or December solstice of a year. */
+export function solstice(year: number, which: "june" | "december"): number {
+  const target = which === "june" ? Math.PI / 2 : (3 * Math.PI) / 2;
+  // Signed angle from the target, monotonic across the search window.
+  const offset = (unix: number) => {
+    const x = apparentSolarLongitude(unix) - target;
+    return ((((x + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  };
+  let lo = Date.UTC(year, which === "june" ? 5 : 11, 10) / 1000;
+  let hi = lo + 20 * 86_400;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (offset(mid) < 0) lo = mid;
+    else hi = mid;
+  }
+  return Math.round((lo + hi) / 2);
 }
 
 /** Approximate local noon (in UTC ms) for a `YYYY-MM-DD` date at a longitude. */

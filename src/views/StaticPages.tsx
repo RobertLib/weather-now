@@ -209,8 +209,8 @@ export function PrivacyView({ locale }: { locale: Locale }) {
             items={[
               "Názvy míst nebo souřadnice, které vyhledáte; váš prohlížeč je posílá přímo službě Open-Meteo, aby získal předpověď.",
               "Přibližnou polohu odvozenou z IP adresy (město), kterou poskytuje náš hosting Vercel. Používáme ji jen k tomu, abychom na úvodní stránce ukázali počasí ve vašem okolí; neukládáme ji.",
-              "Přesnou polohu pouze tehdy, když výslovně povolíte tlačítko polohy. Použije se pro jedno vyhledání a na server se neukládá.",
-              "Anonymní souhrnné statistiky návštěvnosti (zobrazení stránek a výkon) z Vercel Analytics bez cookies.",
+              "Polohu vašeho zařízení pouze tehdy, když ji výslovně povolíte tlačítkem polohy. Zaokrouhlíme ji zhruba na 1 km. Pokud poblíž není město s vlastní stránkou, objeví se v adrese stránky, a tím i v historii prohlížeče a v protokolech požadavků u našeho hostingu, stejně jako každá jiná webová adresa. Jinak ji neukládáme.",
+              "Anonymní souhrnné statistiky návštěvnosti (zobrazení stránek) z Vercel Analytics bez cookies. Parametry z adresy, například souřadnice, do nich neposíláme.",
             ]}
           />
         </Section>
@@ -255,8 +255,8 @@ export function PrivacyView({ locale }: { locale: Locale }) {
           items={[
             "The places or coordinates you search for, which your browser sends directly to Open-Meteo to fetch a forecast.",
             "An approximate, city-level location derived from your IP address by our host, Vercel. It is used only to show local weather on the homepage and is not stored.",
-            "Your precise location, only if you explicitly grant permission with the location button. It is used for that single lookup and is not stored on a server.",
-            "Aggregated, anonymous usage statistics (page views and performance) collected by Vercel Analytics without cookies.",
+            "Your device's location, only if you explicitly grant permission with the location button. It is rounded to about 1 km. Unless a city with its own page is nearby, it appears in the page address, and so in your browser history and in our host's request logs like any web address. We don't store it anywhere else.",
+            "Aggregated, anonymous usage statistics (page views) collected by Vercel Analytics without cookies. Address parameters such as coordinates are removed before anything is sent.",
           ]}
         />
       </Section>
@@ -309,7 +309,7 @@ export function TermsView({ locale }: { locale: Locale }) {
           <Bullets
             items={[
               "narušovat, přetěžovat nebo automatizovaně zneužívat službu či zdroje dat, ze kterých čerpá,",
-              "šířit data o počasí v rozporu s licencí jejich poskytovatelů (Open-Meteo, CC BY 4.0),",
+              "šířit data v rozporu s licencemi jejich poskytovatelů (předpovědi Open-Meteo pod CC BY 4.0, klimatické normály Meteostat pod CC BY-NC 4.0, tedy jen nekomerčně),",
               "odstraňovat nebo skrývat autorská práva a odkazy na zdroje, včetně odkazu ve widgetu.",
             ]}
           />
@@ -358,7 +358,7 @@ export function TermsView({ locale }: { locale: Locale }) {
         <Bullets
           items={[
             "Attempt to disrupt, overload or automate abusive traffic against the service or its upstream data sources",
-            "Redistribute the weather data in breach of its providers' licences (Open-Meteo, CC BY 4.0)",
+            "Redistribute the data in breach of its providers' licences (Open-Meteo forecasts under CC BY 4.0; Meteostat climate normals under CC BY-NC 4.0, i.e. non-commercial use only)",
             "Remove or obscure copyright or attribution notices, including the credit link in the widget",
           ]}
         />

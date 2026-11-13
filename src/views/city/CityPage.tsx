@@ -15,15 +15,16 @@ import { DEFAULT_THEME, conditionKind, skyTheme } from "@/lib/conditions";
 import {
   CLIMATE_PERIOD,
   MonthNormals,
-  climateProvider,
+  climateCredits,
   climateFacts,
   getClimate,
+  isClimateIndexed,
   monthComfort,
   verdict,
-  wearTier,
 } from "@/lib/climate";
+import { wearTier } from "@/lib/wear";
 import { AQI_COLORS, POLLEN_COLORS, UNRATED_COLOR, aqiLevel, pollenLevel, pollutantReadings } from "@/lib/air";
-import { midMonthDaylight, moonPhase, nextMoonEvents, localNoonUtc, sunTimes } from "@/lib/astro";
+import { midMonthDaylight, moonPhase, nextMoonEvents, localNoonUtc, solstice, sunTimes } from "@/lib/astro";
 import { compassIndex } from "@/lib/units";
 import { UV_COLORS, uvLevel } from "@/lib/meteo";
 import {
@@ -81,6 +82,19 @@ function resolve(locale: Locale, params: CityParams): Resolved | null {
 }
 
 const NEEDS_FORECAST: CityView[] = ["overview", "tomorrow", "hourly", "14-day"];
+
+/**
+ * The tomorrow, hourly, 14-day and air-quality views have nothing to show
+ * without server data (only the overview loads live data in the browser).
+ * Throwing instead of rendering an empty page keeps ISR serving the last good
+ * version while Open-Meteo is unavailable; failed fetches aren't cached, so the
+ * next request retries. Only a page that was never rendered shows the error
+ * boundary, which is not cached either.
+ */
+function required<T>(value: T | null, what: string): T {
+  if (value === null) throw new Error(`${what} unavailable`);
+  return value;
+}
 
 /* ------------------------------------------------------------- helpers */
 
@@ -274,6 +288,7 @@ export async function cityMetadata(locale: Locale, params: CityParams): Promise<
       cs: placePath("cs", r.country, r.place, r.view, r.month),
     },
     absoluteTitle: true,
+    noindex: r.view === "climate" && !isClimateIndexed(r.place.id),
   });
 }
 
@@ -359,16 +374,16 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   /* ---- tomorrow ---- */
   if (view === "tomorrow") {
-    const tz = forecast?.timezone ?? place.tz;
-    const days = forecast ? upcomingDays(forecast) : [];
-    const day = days[1];
-    const hours = forecast && day ? forecast.hourly.filter((h) => dayKey(h.time, tz) === day.date) : [];
+    const data = required(forecast, `Forecast for ${place.en}`);
+    const tz = data.timezone;
+    const day = upcomingDays(data)[1];
+    const hours = day ? data.hourly.filter((h) => dayKey(h.time, tz) === day.date) : [];
     return (
       <CityFrame
         {...frame}
         h1={t.city.h1.tomorrow(name)}
-        lead={day ? t.prose.tomorrow(name, brief(t, locale, tz, day), sunLine(day, tz, locale)) : t.city.dataUnavailable}
-        theme={themeOf(forecast)}
+        lead={day ? t.prose.tomorrow(name, brief(t, locale, tz, day), sunLine(day, tz, locale)) : t.city.viewUnavailable}
+        theme={themeOf(data)}
       >
         <JsonLd data={pageSchema} />
         {day && (
@@ -391,7 +406,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
             </Section>
             {hours.length > 1 && (
               <Section title={t.chart.title}>
-                <HourlyChart items={hours} tz={tz} theme={themeOf(forecast)} step={2} />
+                <HourlyChart items={hours} tz={tz} theme={themeOf(data)} step={2} />
               </Section>
             )}
             <Section title={t.views.hourByHour}>
@@ -405,8 +420,9 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   /* ---- hourly ---- */
   if (view === "hourly") {
-    const tz = forecast?.timezone ?? place.tz;
-    const hours = forecast ? upcomingHours(forecast, 48) : [];
+    const data = required(forecast, `Forecast for ${place.en}`);
+    const tz = data.timezone;
+    const hours = upcomingHours(data, 48);
     const temps = hours.map((h) => h.temp);
     return (
       <CityFrame
@@ -415,14 +431,14 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
         lead={
           hours.length
             ? t.prose.hourly(name, hours.length, Math.min(...temps), Math.max(...temps), hours.filter((h) => h.pop >= 0.4).length)
-            : t.city.dataUnavailable
+            : t.city.viewUnavailable
         }
-        theme={themeOf(forecast)}
+        theme={themeOf(data)}
       >
         <JsonLd data={pageSchema} />
         {hours.length > 1 && (
           <Section title={t.chart.title}>
-            <HourlyChart items={hours} tz={tz} theme={themeOf(forecast)} step={3} />
+            <HourlyChart items={hours} tz={tz} theme={themeOf(data)} step={3} />
           </Section>
         )}
         {hours.length > 0 && (
@@ -436,15 +452,16 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   /* ---- 14-day ---- */
   if (view === "14-day") {
-    const tz = forecast?.timezone ?? place.tz;
-    const days = forecast ? upcomingDays(forecast).slice(0, 14) : [];
+    const data = required(forecast, `Forecast for ${place.en}`);
+    const tz = data.timezone;
+    const days = upcomingDays(data).slice(0, 14);
     const range = rangeProse(locale, name, tz, days);
     return (
       <CityFrame
         {...frame}
         h1={t.city.h1["14-day"](name)}
-        lead={range ? t.prose.range(range) : t.city.dataUnavailable}
-        theme={themeOf(forecast)}
+        lead={range ? t.prose.range(range) : t.city.viewUnavailable}
+        theme={themeOf(data)}
       >
         <JsonLd data={pageSchema} />
         {days.length > 0 && (
@@ -460,6 +477,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   /* ---- air quality ---- */
   if (view === "air-quality") {
+    required(air, `Air quality for ${place.en}`);
     const level = air?.europeanAqi != null ? aqiLevel(air.europeanAqi) : null;
     const worst = air?.days.reduce<(typeof air.days)[number] | null>(
       (best, d) => (d.europeanAqi !== null && (!best || d.europeanAqi > (best.europeanAqi ?? -1)) ? d : best),
@@ -615,9 +633,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
               name: t.city.h1.climate(name),
               description: t.city.desc.climate(name, input),
               path: placePath(locale, country, place, "climate"),
-              source: climateProvider(place.id).name,
-              sourceUrl: climateProvider(place.id).url,
-              license: climateProvider(place.id).license,
+              sources: climateCredits(place.id).map(({ provider }) => provider),
               period: CLIMATE_PERIOD,
               lat: place.lat,
               lon: place.lon,
@@ -631,7 +647,14 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
         <Section title={t.views.monthlyTable}>
           <ClimateTable t={t} locale={locale} place={place} country={country} months={months} />
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            {t.views.climateSource(climateProvider(place.id).name, CLIMATE_PERIOD)} ({climateProvider(place.id).license})
+            {t.views.climateSource(
+              climateCredits(place.id)
+                .map(({ provider, part }) =>
+                  part ? `${provider.name} (${t.views.climatePart[part]}, ${provider.license})` : `${provider.name} (${provider.license})`
+                )
+                .join(locale === "cs" ? " a " : " and "),
+              CLIMATE_PERIOD
+            )}
           </p>
         </Section>
         <Section title={t.views.bestTime}>
@@ -1008,11 +1031,15 @@ function SunView({ t, locale, place }: { t: Dictionary; locale: Locale; place: P
   });
   const moon = moonPhase(now);
   const next = nextMoonEvents(now);
+  // The next June and December solstices, on the local calendar date they fall on.
   const year = Number(today.slice(0, 4));
-  const solstices = [
-    { label: t.views.juneSolstice, date: `${year}-06-21` },
-    { label: t.views.decemberSolstice, date: `${year}-12-21` },
-  ].map((x) => ({ ...x, s: sunForDate(place, x.date) }));
+  const solstices = (["june", "december"] as const)
+    .map((which) => {
+      const thisYear = dayKey(solstice(year, which), tz);
+      const date = thisYear >= today ? thisYear : dayKey(solstice(year + 1, which), tz);
+      return { label: t.views.solstice(which === "june", place.lat < 0), date, s: sunForDate(place, date) };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   const fmtChange = (sec: number) => {
     const sign = sec > 0 ? "+" : sec < 0 ? "−" : "±";

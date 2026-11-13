@@ -8,6 +8,7 @@ import { PlaceLabels, PlaceRef } from "@/types/weather";
 import { searchLocations } from "@/lib/openmeteo";
 import { resolvePlaceHref } from "@/lib/navigation-client";
 import { localizePlace } from "@/lib/places-client";
+import { favoriteId } from "@/lib/favorites";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useI18n } from "@/i18n/client";
 import SearchBar from "@/components/SearchBar";
@@ -25,22 +26,24 @@ type State = { status: "resolving" } | { status: "ready"; place: PlaceRef } | { 
 export default function HomeClient() {
   const { t } = useI18n();
   const [error, setError] = useState<string | null>(null);
+  // The place the dashboard shows, so the saved-places strip can highlight it.
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <SearchBar onError={setError} />
-      <FavoritesBar />
+      <FavoritesBar activeId={activeId} />
       {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
       {/* The dashboard depends on the query string, so it renders in the
           browser; everything else on the homepage stays static. */}
       <Suspense fallback={<WeatherSkeleton label={t.home.locating} />}>
-        <HomeDashboard />
+        <HomeDashboard onPlace={setActiveId} />
       </Suspense>
     </div>
   );
 }
 
-function HomeDashboard() {
+function HomeDashboard({ onPlace }: { onPlace: (favoriteId: string | null) => void }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   // Search, favourites and geolocation all navigate to `/?lat=…&lon=…` without
@@ -52,7 +55,11 @@ function HomeDashboard() {
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    const settle = (next: State) => !cancelled && setState(next);
+    const settle = (next: State) => {
+      if (cancelled) return;
+      setState(next);
+      onPlace(next.status === "ready" ? favoriteId(next.place.lat, next.place.lon) : null);
+    };
 
     (async () => {
       const params = new URLSearchParams(query);

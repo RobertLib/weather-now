@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { DEFAULT_LOCALE, LOCALES, Locale } from "@/i18n/config";
 import { COUNTRIES, PLACES, getCountry, isCountryHubIndexed } from "@/lib/places";
-import { getClimate } from "@/lib/climate";
+import { getClimate, isClimateIndexed } from "@/lib/climate";
 import {
   CITY_VIEWS,
   CityView,
@@ -70,7 +70,8 @@ export default async function sitemap(props: { id: Promise<string> }): Promise<M
   return PLACES.flatMap((place) => {
     const country = getCountry(place.cc);
     if (!country) return [];
-    const climate = getClimate(place.id);
+    // Climate pages that only repeat a bigger place's normals are noindex.
+    const climate = getClimate(place.id) && isClimateIndexed(place.id);
     const views = CITY_VIEWS.filter((v) => v !== "climate" || climate);
     const at = (view: CityView, month?: number) => ({
       en: placePath("en", country, place, view, month),

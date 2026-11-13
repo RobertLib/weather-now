@@ -1,7 +1,7 @@
 import { COUNTRIES, PLACES } from "@/lib/places";
 import type { PlaceIndex } from "@/lib/places-client";
 
-// Built once at deploy time and served from the CDN.
+// Built once at deploy time and served from the CDN (which a deploy purges).
 export const dynamic = "force-static";
 
 export function GET() {
@@ -12,6 +12,8 @@ export function GET() {
     places: PLACES.map((p) => [p.id, p.cc, p.en, p.cs, p.slug.en, p.slug.cs, p.lat, p.lon]),
   };
   return Response.json(index, {
-    headers: { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" },
+    // Browsers keep it for an hour only: after a deploy that adds or removes
+    // places, a long-cached copy would suggest pages that no longer exist.
+    headers: { "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400" },
   });
 }

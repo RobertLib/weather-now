@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
+import { SITE_URL } from "@/lib/routes";
 import { geistSans, outfit } from "@/app/fonts";
+import WeatherIconDefs from "@/components/WeatherIconDefs";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.weather-now.app"),
+  metadataBase: new URL(SITE_URL),
   robots: { index: false, follow: true },
 };
 
@@ -26,6 +28,7 @@ export default async function EmbedLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className={`${geistSans.variable} ${outfit.variable} bg-transparent font-sans antialiased`}>
+        <WeatherIconDefs />
         {children}
       </body>
     </html>

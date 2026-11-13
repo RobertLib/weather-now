@@ -1,3 +1,4 @@
+import "server-only";
 import placesData from "@/data/places.json";
 import countriesData from "@/data/countries.json";
 import { LOCALES, Locale } from "@/i18n/config";
@@ -85,6 +86,15 @@ export function getPlaceBySlug(
   if (!country) return null;
   const place = placesIn(country.cc).find((p) => p.slug[locale] === placeSlug);
   return place ? { place, country } : null;
+}
+
+/**
+ * The place's region (admin1) when it adds something: many cities are their
+ * own region ("Prague, Prague"), which would only repeat the name.
+ */
+export function placeRegion(place: Place, locale: Locale): string | undefined {
+  const region = place.a1?.[locale];
+  return region && region !== place[locale] ? region : undefined;
 }
 
 /** Name, country and canonical path of a curated place in every language. */

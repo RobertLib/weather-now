@@ -9,6 +9,7 @@ import {
   PLACES,
   getCountryBySlug,
   isCountryHubIndexed,
+  placeRegion,
   placesIn,
 } from "@/lib/places";
 import { countryPath, homePath, placePath, worldPath } from "@/lib/routes";
@@ -161,9 +162,9 @@ export async function CountryView({ locale, slug }: { locale: Locale; slug: stri
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{place[locale]}</span>
-                    {place.a1 && (
+                    {placeRegion(place, locale) && (
                       <span className="block truncate text-[0.7rem] text-slate-500 dark:text-slate-400">
-                        {place.a1[locale]}
+                        {placeRegion(place, locale)}
                       </span>
                     )}
                   </span>

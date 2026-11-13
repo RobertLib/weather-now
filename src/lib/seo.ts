@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Locale, OG_LOCALE } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
-import { absoluteUrl } from "@/lib/routes";
+import { SITE_URL, absoluteUrl } from "@/lib/routes";
 
 export type Alternates = Partial<Record<Locale, string>>;
 
@@ -49,6 +49,8 @@ export function pageMetadata({
       url: absoluteUrl(path),
       title,
       description,
+      // A static file (public/), not the app/ file convention, which would also
+      // attach it to the global error page, where no metadataBase can be set.
       images: [{ url: "/opengraph-image.png", width: 1200, height: 630, alt: t.meta.ogAlt }],
     },
     twitter: {
@@ -65,7 +67,7 @@ export function pageMetadata({
 export function rootMetadata(locale: Locale): Metadata {
   const t = getDictionary(locale);
   return {
-    metadataBase: new URL("https://www.weather-now.app"),
+    metadataBase: new URL(SITE_URL),
     title: { default: t.home.title, template: `%s | ${t.meta.siteName}` },
     description: t.meta.description,
     applicationName: t.meta.siteName,

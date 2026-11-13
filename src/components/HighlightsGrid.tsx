@@ -67,6 +67,7 @@ export default function HighlightsGrid({
         delay={0}
         icon={<Droplets className="h-4 w-4" aria-hidden="true" />}
         title={t.common.humidity}
+        srValue={`${current.humidity}%`}
         hint={h.dewPoint(formatTemp(dp, units), h.dewComfort[dewComfortLevel(dp)])}
         visual={
           <RingGauge value={current.humidity} color={accent} label={`${current.humidity}%`} />
@@ -90,6 +91,7 @@ export default function HighlightsGrid({
         delay={2}
         icon={<Gauge className="h-4 w-4" aria-hidden="true" />}
         title={h.pressure}
+        srValue={`${formatPressure(current.pressure, units)} ${pressureUnit(units)}`}
         hint={
           <span className="inline-flex items-center gap-1">
             <TrendIcon className="h-3 w-3" aria-hidden="true" />
@@ -132,6 +134,7 @@ export default function HighlightsGrid({
         delay={4}
         icon={<Cloud className="h-4 w-4" aria-hidden="true" />}
         title={h.clouds}
+        srValue={`${clouds}%`}
         hint={h.cloudLevels[clouds < 15 ? 0 : clouds < 50 ? 1 : clouds < 85 ? 2 : 3]}
         visual={<RingGauge value={clouds} color={accent} label={`${clouds}%`} />}
       />
@@ -162,6 +165,7 @@ function Tile({
   icon,
   title,
   value,
+  srValue,
   hint,
   visual,
   delay,
@@ -169,6 +173,8 @@ function Tile({
   icon: React.ReactNode;
   title: string;
   value?: string;
+  /** The reading for screen readers when only the (hidden) gauge shows it. */
+  srValue?: string;
   hint?: React.ReactNode;
   visual: React.ReactNode;
   delay: number;
@@ -188,6 +194,7 @@ function Tile({
       </div>
 
       <div className="min-h-8">
+        {srValue && <p className="sr-only">{srValue}</p>}
         {value && (
           <p className="tabular font-display text-lg leading-tight font-bold">
             {value}

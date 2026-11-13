@@ -71,7 +71,6 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const cs: Dictionary = {
   meta: {
     siteName: "WeatherNow",
-    tagline: "Aktuální počasí a předpověď pro každé město",
     description:
       "Přesná hodinová a 14denní předpověď počasí, kvalita ovzduší, východ a západ slunce a klimatické průměry pro města po celém světě. Rychle, zdarma a bez reklam.",
     ogAlt: "WeatherNow — aktuální počasí a předpověď",
@@ -113,7 +112,6 @@ const cs: Dictionary = {
     now: "Teď",
     today: "Dnes",
     tomorrow: "Zítra",
-    tonight: "Dnes v noci",
     high: "Max.",
     low: "Min.",
     wind: "Vítr",
@@ -127,7 +125,6 @@ const cs: Dictionary = {
     sunset: "Západ",
     daylight: "Délka dne",
     sunshine: "Slunce",
-    time: "Čas",
     day: "Den",
     date: "Datum",
     conditions: "Počasí",
@@ -319,15 +316,15 @@ const cs: Dictionary = {
     dryTitle: "Bez deště",
     dryText: "Během příštích 12 hodin se nečekají žádné významné srážky.",
     windTitle: "Větrno",
-    windText: (k: number) => `Nárazy až ${k} km/h — zajistěte volné předměty venku.`,
+    windText: (speed: string) => `Nárazy až ${speed} — zajistěte volné předměty venku.`,
     iceTitle: "Pozor na náledí",
     iceText: "Teploty kolem nuly a vysoká vlhkost — povrchy mohou klouzat.",
     bestTitle: (at: string) => `Nejlepší chvíle: ${at}`,
     bestText: (t: string, p: number) =>
       `${t} a ${r(p * 100)} % šance na srážky — to nejlepší z příštího dne.`,
     swingTitle: "Velký teplotní rozdíl",
-    swingText: (deg: number) =>
-      `Mezi maximem a minimem za příštích 24 hodin je asi ${deg}° — oblečte se do vrstev.`,
+    swingText: (delta: string) =>
+      `Mezi maximem a minimem za příštích 24 hodin je asi ${delta} — oblečte se do vrstev.`,
     dryAirTitle: "Velmi suchý vzduch",
     dryAirText: (h: number) => `Vlhkost je jen ${h} % — mějte po ruce vodu.`,
     muggyTitle: "Dusno",
@@ -444,9 +441,6 @@ const cs: Dictionary = {
       `Aktuální teploty a počasí – ${country}, ${n} ${plural(n, "místo", "místa", "míst")}. Vyberte místo a zobrazte hodinovou a 14denní předpověď.`,
     warmest: (name: string, t: number) => `Teď nejtepleji: ${name}, ${T(t)}.`,
     coldest: (name: string, t: number) => `Nejchladněji: ${name}, ${T(t)}.`,
-    place: "Místo",
-    region: "Kraj / oblast",
-    now: "Teď",
   },
 
   city: {
@@ -507,9 +501,8 @@ const cs: Dictionary = {
     climateLink: (n: string) => `Celý přehled podnebí: ${n}`,
     dataUnavailable:
       "Aktuální předpověď se na serveru teď nepodařilo načíst — za okamžik se načte ve vašem prohlížeči.",
+    viewUnavailable: "Data pro tento pohled teď nejsou k dispozici. Zkuste to prosím za pár minut.",
     elevation: (m: number) => `Nadmořská výška ${r(m)} m`,
-    coords: "Souřadnice",
-    timezone: "Časové pásmo",
     embedCta: "Vložte si tuto předpověď na svůj web",
   },
 
@@ -581,7 +574,8 @@ const cs: Dictionary = {
     verdicts: {
       great: (n: string, m: number) => `${cap(MONTHS[m])} patří k nejlepším měsícům pro návštěvu (${n}) — příjemné počasí na procházky i výlety.`,
       good: (n: string, m: number) => `${cap(MONTHS[m])} je dobrá doba pro návštěvu (${n}); počasí je většinou příjemné.`,
-      fair: (n: string, m: number) => `${cap(MONTHS[m])} je pro návštěvu (${n}) průměrný — počítejte s proměnlivým počasím.`,
+      // "doba" místo přídavného jména: shoda by jinak neseděla u "září" (střední rod).
+      fair: (n: string, m: number) => `${cap(MONTHS[m])} je pro návštěvu (${n}) spíše průměrná doba — počítejte s proměnlivým počasím.`,
       poor: (n: string, m: number) => `${cap(MONTHS[m])} není nejpříjemnější měsíc (${n}), zato bývá méně turistů; oblečte se podle počasí.`,
     },
     pack: {
@@ -724,13 +718,12 @@ const cs: Dictionary = {
     nextFull: "Příští úplněk",
     nextNew: "Příští nov",
     solstices: "Nejdelší a nejkratší den",
-    juneSolstice: "Letní slunovrat",
-    decemberSolstice: "Zimní slunovrat",
+    // Na jižní polokouli je červnový slunovrat zimní.
+    solstice: (june: boolean, southern: boolean) => (june !== southern ? "Letní slunovrat" : "Zimní slunovrat"),
     sunNote: "Časy jsou spočítané pro střed města a od místních kalendářů se mohou lišit o minutu či dvě.",
     monthlyTable: "Měsíční průměry",
     climateChart: "Teploty a srážky během roku",
     bestTime: "Kdy jet",
-    byMonth: "Počasí po měsících",
     monthStats: "Průměry",
     whatToPack: "Co si sbalit",
     otherMonths: "Další měsíce",
@@ -739,6 +732,7 @@ const cs: Dictionary = {
     recordHigh: "Rekordní maximum",
     recordLow: "Rekordní minimum",
     climateSource: (source: string, period: string) => `Klimatické normály za období ${period}, zdroj: ${source}.`,
+    climatePart: { temperature: "teploty", precipitation: "srážky" },
     compareYear: "Ve srovnání se zbytkem roku",
     rank: (rank: number) =>
       rank === 1 ? "nejteplejší měsíc roku" : rank === 12 ? "nejchladnější měsíc roku" : `${rank}. nejteplejší měsíc roku`,

@@ -7,18 +7,28 @@
  *   src/app/icon.svg              scalable favicon
  *   src/app/favicon.ico           legacy favicon (16/32/48)
  *   src/app/apple-icon.png        iOS home screen (180, full bleed)
- *   src/app/opengraph-image.png   social card (1200x630)
+ *   public/opengraph-image.png    social card (1200x630), referenced by lib/seo.ts
  *   public/icon-192.png           PWA icon, purpose "any"
  *   public/icon-512.png           PWA icon, purpose "any"
  *   public/icon-maskable-512.png  PWA icon, purpose "maskable"
+ *   public/screenshot-wide.png    manifest screenshot (1280x720)
+ *   public/screenshot-narrow.png  manifest screenshot (375x812)
  *
- * Requires sharp (already a Next.js dependency) and ImageMagick for the .ico.
+ * Requires sharp (a dev dependency) and ImageMagick (`magick`) for the .ico.
+ * Text is rendered with system fonts: Avenir Next (macOS) where available,
+ * otherwise a fallback, so the text-bearing images differ between machines.
+ * Regenerate them on macOS to keep the published look.
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+
+/** Outputs are written relative to the repo, wherever the script is run from. */
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const out = (file) => join(ROOT, file);
 
 /* ------------------------------------------------------------------ palette */
 
@@ -269,7 +279,7 @@ function ogSvg() {
     letter-spacing="-3" fill="#ffffff">Weather<tspan fill="url(#ognow)">Now</tspan></text>
 
   <text x="312" y="336" font-family="${DISPLAY}" font-size="36" font-weight="500"
-    fill="#e0f2fe" opacity="0.94">Live conditions, hourly trends and a 5-day outlook</text>
+    fill="#e0f2fe" opacity="0.94">Live conditions, hourly trends, 14-day outlook</text>
 
   ${ogCurve()}
 
@@ -295,8 +305,8 @@ function brandCardSvg(w, h) {
   const subSize = unit * (w < 500 ? 0.038 : 0.042);
   const tagline =
     w < 500
-      ? "Live conditions · trends · 5 days"
-      : "Live conditions · hourly trends · 5-day outlook";
+      ? "Live conditions · trends · 14 days"
+      : "Live conditions · hourly trends · 14-day outlook";
   const curveW = Math.min(w * 0.74, unit * 1.9);
 
   const points = [
@@ -408,14 +418,14 @@ async function main() {
   const tmp = mkdtempSync(join(tmpdir(), "weathernow-icons-"));
 
   // Scalable favicon, checked into the app directory.
-  writeFileSync("src/app/icon.svg", rounded + "\n");
+  writeFileSync(out("src/app/icon.svg"), rounded + "\n");
 
-  const png = async (svg, size, out) => {
+  const png = async (svg, size, file) => {
     await sharp(Buffer.from(svg))
       .resize(size, size)
       .png({ compressionLevel: 9 })
-      .toFile(out);
-    console.log(`  ${out} (${size}x${size})`);
+      .toFile(out(file));
+    console.log(`  ${file} (${size}x${size})`);
   };
 
   console.log("icons:");
@@ -434,26 +444,26 @@ async function main() {
     writeFileSync(file, await svgToPng(size <= 16 ? simple : rounded, size));
     icoParts.push(file);
   }
-  execFileSync("magick", [...icoParts, "src/app/favicon.ico"]);
+  execFileSync("magick", [...icoParts, out("src/app/favicon.ico")]);
   console.log(`  src/app/favicon.ico (${icoSizes.join(", ")})`);
 
   console.log("social card:");
   await sharp(Buffer.from(ogSvg()), { density: 96 })
     .resize(W, H)
     .png({ compressionLevel: 9 })
-    .toFile("src/app/opengraph-image.png");
-  console.log(`  src/app/opengraph-image.png (${W}x${H})`);
+    .toFile(out("public/opengraph-image.png"));
+  console.log(`  public/opengraph-image.png (${W}x${H})`);
 
   console.log("manifest screenshots:");
-  for (const [w, h, out] of [
+  for (const [w, h, file] of [
     [1280, 720, "public/screenshot-wide.png"],
     [375, 812, "public/screenshot-narrow.png"],
   ]) {
     await sharp(Buffer.from(brandCardSvg(w, h)), { density: 96 })
       .resize(w, h)
       .png({ compressionLevel: 9 })
-      .toFile(out);
-    console.log(`  ${out} (${w}x${h})`);
+      .toFile(out(file));
+    console.log(`  ${file} (${w}x${h})`);
   }
 }
 

@@ -130,7 +130,6 @@ export interface MonthProse {
 const en = {
   meta: {
     siteName: "WeatherNow",
-    tagline: "Real-time weather forecasts for every city",
     description:
       "Accurate hourly and 14-day weather forecasts, air quality, sunrise times and climate averages for cities worldwide. Fast, free and ad-free.",
     ogAlt: "WeatherNow — real-time weather forecasts",
@@ -172,7 +171,6 @@ const en = {
     now: "Now",
     today: "Today",
     tomorrow: "Tomorrow",
-    tonight: "Tonight",
     high: "High",
     low: "Low",
     wind: "Wind",
@@ -186,7 +184,6 @@ const en = {
     sunset: "Sunset",
     daylight: "Daylight",
     sunshine: "Sunshine",
-    time: "Time",
     day: "Day",
     date: "Date",
     conditions: "Conditions",
@@ -378,16 +375,15 @@ const en = {
     dryTitle: "Dry spell ahead",
     dryText: "No meaningful precipitation expected in the next 12 hours.",
     windTitle: "Windy conditions",
-    windText: (kmhValue: number) =>
-      `Gusts up to ${kmhValue} km/h — secure loose items outdoors.`,
+    windText: (speed: string) => `Gusts up to ${speed} — secure loose items outdoors.`,
     iceTitle: "Watch for ice",
     iceText: "Temperatures near freezing with high moisture — surfaces may be slippery.",
     bestTitle: (at: string) => `Best window: ${at}`,
     bestText: (t: string, p: number) =>
       `${t} with ${r(p * 100)}% rain chance — the pick of the next day.`,
     swingTitle: "Big temperature swing",
-    swingText: (deg: number) =>
-      `About ${deg}° between the high and low over the next 24 hours — dress in layers.`,
+    swingText: (delta: string) =>
+      `About ${delta} between the high and low over the next 24 hours — dress in layers.`,
     dryAirTitle: "Very dry air",
     dryAirText: (h: number) => `Humidity is only ${h}% — keep a water bottle nearby.`,
     muggyTitle: "Muggy out",
@@ -507,9 +503,6 @@ const en = {
         : `Current temperatures and conditions in ${n} places across ${country}. Select a place for the hourly and 14-day forecast.`,
     warmest: (name: string, t: number) => `Warmest right now: ${name}, ${T(t)}.`,
     coldest: (name: string, t: number) => `Coldest: ${name}, ${T(t)}.`,
-    place: "Place",
-    region: "Region",
-    now: "Now",
   },
 
   city: {
@@ -570,9 +563,8 @@ const en = {
     climateLink: (n: string) => `Full climate guide for ${n}`,
     dataUnavailable:
       "Live forecast data couldn't be loaded on the server just now — it will load in your browser in a moment.",
+    viewUnavailable: "Forecast data for this view isn't available right now. Please check back in a few minutes.",
     elevation: (m: number) => `Elevation ${r(m)} m`,
-    coords: "Coordinates",
-    timezone: "Time zone",
     embedCta: "Put this forecast on your website",
   },
 
@@ -790,13 +782,13 @@ const en = {
     nextFull: "Next full moon",
     nextNew: "Next new moon",
     solstices: "Longest and shortest days",
-    juneSolstice: "June solstice",
-    decemberSolstice: "December solstice",
+    /** "June/December" reads right in both hemispheres; which day is longest doesn't. */
+    solstice: (june: boolean, southern: boolean) =>
+      `${june ? "June" : "December"} solstice (${june !== southern ? "longest" : "shortest"} day)`,
     sunNote: "Times are calculated for the city centre and may differ by a minute or two from local almanacs.",
     monthlyTable: "Monthly averages",
     climateChart: "Temperature and precipitation through the year",
     bestTime: "Best time to visit",
-    byMonth: "Weather by month",
     monthStats: "Averages",
     whatToPack: "What to pack",
     otherMonths: "Other months",
@@ -805,6 +797,7 @@ const en = {
     recordHigh: "Record high",
     recordLow: "Record low",
     climateSource: (source: string, period: string) => `Climate normals for ${period} from ${source}.`,
+    climatePart: { temperature: "temperatures", precipitation: "precipitation" },
     compareYear: "Compared with the rest of the year",
     rank: (rank: number) =>
       rank === 1 ? "the warmest month of the year" : rank === 12 ? "the coldest month of the year" : `the ${ordinal(rank)} warmest month of the year`,
