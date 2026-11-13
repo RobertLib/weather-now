@@ -122,9 +122,11 @@ export default function WeatherBackground({ theme }: WeatherBackgroundProps) {
         </div>
       )}
 
-      {/* Rain */}
+      {/* Rain, snow and lightning only make sense in motion. With reduced motion
+          their animations end at once and the layers would fall back to their
+          resting styles: drops frozen along the top edge and a permanent flash. */}
       {raining && (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 motion-reduce:hidden">
           {Array.from({ length: kind === "drizzle" ? 45 : 80 }, (_, i) => (
             <span
               key={i}
@@ -144,9 +146,8 @@ export default function WeatherBackground({ theme }: WeatherBackgroundProps) {
         </div>
       )}
 
-      {/* Snow */}
       {snowing && (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 motion-reduce:hidden">
           {Array.from({ length: 60 }, (_, i) => {
             const size = 3 + rand(i + 11) * 5;
             return (
@@ -167,13 +168,12 @@ export default function WeatherBackground({ theme }: WeatherBackgroundProps) {
         </div>
       )}
 
-      {/* Lightning */}
       {kind === "thunder" && (
-        <div className="animate-flash absolute inset-0 bg-indigo-100/60" />
+        <div className="animate-flash absolute inset-0 bg-indigo-100/60 motion-reduce:hidden" />
       )}
 
       {/* Horizon haze + vignette to keep text legible */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white/25 to-transparent dark:from-black/40" />
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-linear-to-t from-white/25 to-transparent dark:from-black/40" />
       <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_0%,transparent_40%,rgba(2,6,23,0.28)_100%)]" />
     </div>
   );

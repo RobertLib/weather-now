@@ -38,7 +38,7 @@ stay fresh.
 
 If Open-Meteo fails while a page renders, the overview still renders and loads
 its data in the browser. The tomorrow, hourly, 14-day and air-quality views
-have no browser fallback, so they throw instead: during a background
+and the embeddable widget have no browser fallback, so they throw instead: during a background
 regeneration ISR keeps serving the last good version, and failed fetches are
 not cached, so the next request retries. A page that was never rendered shows
 the error page (500, not cached).
@@ -59,10 +59,14 @@ generated sentences and the FAQs live in `src/i18n/en.ts` and `src/i18n/cs.ts`.
   `/sitemaps/sitemap/{pages,en,cs}.xml`.
 - Internal links: the footer links to popular cities and countries, and each
   city page links to the same view for its nearest cities.
-- Climate pages of places whose normals come from the same station or grid
-  cell as a more populous place would repeat its numbers, so they are
+- Climate pages that would show exactly the numbers of a more populous place
+  with the same station or grid cell (`origins` in `climate.json`) are
   `noindex, follow` and left out of the sitemap (`isClimateIndexed` in
-  `src/lib/climate.ts`, driven by `origins` in `climate.json`).
+  `src/lib/climate.ts`). A shared origin alone isn't enough: normals are
+  corrected to each place's elevation, so a mountain resort that borrows a
+  valley station gets its own numbers and stays indexed.
+- City meta descriptions quote no live numbers: search engines keep a snippet
+  for days, long after a "current" temperature has changed.
 
 **Security headers** (`next.config.ts`): `nosniff`, a strict referrer policy,
 a permissions policy that only allows geolocation, and
@@ -88,18 +92,22 @@ from the embedding site.
 - **Places:** `scripts/build-places.mjs` produces `src/data/places.json` and
   `src/data/countries.json`. It starts from `scripts/seed-cities.json` plus an
   extra list inside the script, resolves each place through the Open-Meteo
-  geocoding API (GeoNames), and adds English and Czech names and slugs.
+  geocoding API, and adds English and Czech names and slugs. Names,
+  coordinates, population and elevation come from
+  [GeoNames](https://www.geonames.org/) (CC BY 4.0, credited in the footer).
 - **Climate normals (1991–2020):** `scripts/build-climate.mjs` produces
   `src/data/climate.json`.
   - **Stations first.** Temperatures come from [Meteostat](https://meteostat.net/)
-    stations (CC BY-NC 4.0, so non-commercial use only) for 401 of 440 places.
+    stations (CC BY-NC 4.0, so non-commercial use only) for 406 of 440 places.
     Published normals are used where complete. Otherwise normals are computed
     from the station's daily data, with missing years filled in from NASA
     POWER anomalies.
   - **Elevation.** Station values are corrected to the place elevation with
     seasonal lapse rates (weaker in winter, when inversions are common).
   - **Precipitation** comes from the same station, a nearby one, or NASA POWER.
-    Pages credit both providers when they differ.
+    It isn't elevation-corrected, so a station more than 250 m above or below
+    the place must roughly agree with POWER (within a factor of 2), as must any
+    total computed from daily data. Pages credit both providers when they differ.
   - **Fallback.** [NASA POWER](https://power.larc.nasa.gov/) daily data
     (public domain), lapse-corrected, is used only where no usable station
     exists. Its grid cells are coarse, so the script flags places where POWER
@@ -114,14 +122,19 @@ from the embedding site.
 Regenerate the datasets with `npm run data`. A cold run takes about 20 minutes
 (mostly NASA POWER); downloads are cached in `$DATA_CACHE_DIR`, which defaults
 to `.cache/data` in the repo (git-ignored). Keep that cache: a re-run then works
-offline and GeoNames ids stay stable.
+offline and GeoNames ids stay stable. A 404 is cached too (Meteostat has no
+file for many stations); `DATA_RETRY_404=1 npm run data` asks again. POWER
+responses missing a parameter are used for that run only and never cached.
 
 URL slugs are published URLs, so `build-places.mjs` keeps every slug already in
 `places.json` / `countries.json` (by place id and country code), even when
 GeoNames renames a place or Node's ICU data renames a country. A new namesake
-gets a region suffix instead of renaming the existing city. Review the `*`
-notes the script prints: they list kept slugs whose names changed and removed
-places whose URLs will start returning 404. The logic lives in
+gets a region suffix instead of renaming the existing city. When GeoNames
+re-issues a place under a new id, the one new place in that country that would
+have had the old slug takes over all of the old id's slugs (both languages).
+Review the `*` notes the script prints: they list kept slugs whose names
+changed, re-issued ids, places that moved to another country and removed
+places, whose URLs will start returning 404. The logic lives in
 `scripts/lib/slugs.mjs` and is covered by tests. Every slug must match
 `^[a-z0-9]+(-[a-z0-9]+)*$`; names that fold to nothing (non-Latin script) fall
 back to the English name, then to the id.
@@ -154,5 +167,7 @@ guesses a city when deployed on Vercel.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Weather data © Open-Meteo.com (CC BY 4.0).
+MIT — see [LICENSE](LICENSE). Weather data © Open-Meteo.com (CC BY 4.0). Place
+data © GeoNames (CC BY 4.0). Climate normals: Meteostat (CC BY-NC 4.0) and NASA
+POWER (public domain).
 Created by [Robert Libsansky](https://github.com/RobertLib).

@@ -342,15 +342,19 @@ export default function WeatherDashboard({
         )}
       </div>
 
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="animate-pop fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-sm font-medium text-white shadow-2xl backdrop-blur-md dark:bg-white/90 dark:text-slate-900"
-        >
-          {toast}
-        </div>
-      )}
+      {/* The live region stays mounted: screen readers announce changes to an
+          existing region, not regions that appear together with their text. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed bottom-5 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2"
+      >
+        {toast && (
+          <div className="animate-pop rounded-full bg-slate-900/90 px-4 py-2 text-center text-sm font-medium text-white shadow-2xl backdrop-blur-md dark:bg-white/90 dark:text-slate-900">
+            {toast}
+          </div>
+        )}
+      </div>
     </>
   );
 }

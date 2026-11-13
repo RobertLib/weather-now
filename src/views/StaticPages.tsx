@@ -309,7 +309,7 @@ export function TermsView({ locale }: { locale: Locale }) {
           <Bullets
             items={[
               "narušovat, přetěžovat nebo automatizovaně zneužívat službu či zdroje dat, ze kterých čerpá,",
-              "šířit data v rozporu s licencemi jejich poskytovatelů (předpovědi Open-Meteo pod CC BY 4.0, klimatické normály Meteostat pod CC BY-NC 4.0, tedy jen nekomerčně),",
+              "šířit data v rozporu s licencemi jejich poskytovatelů (předpovědi Open-Meteo pod CC BY 4.0, názvy a poloha míst z GeoNames pod CC BY 4.0, klimatické normály Meteostat pod CC BY-NC 4.0, tedy jen nekomerčně),",
               "odstraňovat nebo skrývat autorská práva a odkazy na zdroje, včetně odkazu ve widgetu.",
             ]}
           />
@@ -358,7 +358,7 @@ export function TermsView({ locale }: { locale: Locale }) {
         <Bullets
           items={[
             "Attempt to disrupt, overload or automate abusive traffic against the service or its upstream data sources",
-            "Redistribute the data in breach of its providers' licences (Open-Meteo forecasts under CC BY 4.0; Meteostat climate normals under CC BY-NC 4.0, i.e. non-commercial use only)",
+            "Redistribute the data in breach of its providers' licences (Open-Meteo forecasts under CC BY 4.0; place names and locations from GeoNames under CC BY 4.0; Meteostat climate normals under CC BY-NC 4.0, i.e. non-commercial use only)",
             "Remove or obscure copyright or attribution notices, including the credit link in the widget",
           ]}
         />

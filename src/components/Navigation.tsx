@@ -22,14 +22,18 @@ export default function Navigation() {
   const isActive = (href: string, exact: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
-  // The page's own hreflang tags know its translation; fall back to the other homepage.
+  // The page's own hreflang tags know its translation; fall back to the other
+  // homepage. Only their path is used: the tags carry the production origin,
+  // which would send local and preview deployments to the live site. The query
+  // string stays, so the homepage keeps the chosen place. (The two languages
+  // have separate root layouts, so this is a full page load either way.)
   const switchLanguage = (event: React.MouseEvent<HTMLAnchorElement>) => {
     const alt = document.querySelector<HTMLLinkElement>(
       `link[rel="alternate"][hreflang="${other}"]`
     );
     if (alt?.href) {
       event.preventDefault();
-      window.location.assign(alt.href);
+      window.location.assign(new URL(alt.href).pathname + window.location.search);
     }
   };
 

@@ -33,7 +33,8 @@ interface ClimateFile {
   precipSources?: Record<string, string>;
   /**
    * Where each place's temperature normals come from: `meteostat:<station>`
-   * or `power:<lat>,<lon>` (grid cell). Places sharing an origin share numbers.
+   * or `power:<lat>,<lon>` (grid cell). Places sharing an origin start from
+   * the same normals, but each is corrected to its own elevation.
    */
   origins?: Record<string, string>;
   data: Record<string, MonthNormals[]>;
@@ -46,6 +47,8 @@ export interface ClimateProvider {
   name: string;
   url: string;
   license: string;
+  /** Machine-readable licence, for the Dataset markup. */
+  licenseUrl?: string;
 }
 
 /** Known upstream sources, keyed by the ids used in `climate.json#sources`. */
@@ -55,12 +58,14 @@ const PROVIDERS: Record<string, ClimateProvider> = {
     name: "Meteostat",
     url: "https://meteostat.net/",
     license: "CC BY-NC 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by-nc/4.0/",
   },
   power: {
     id: "power",
     name: "NASA POWER",
     url: "https://power.larc.nasa.gov/",
     license: "Public domain",
+    licenseUrl: "https://creativecommons.org/publicdomain/mark/1.0/",
   },
 };
 
@@ -71,9 +76,9 @@ const FALLBACK: ClimateProvider = {
   license: CLIMATE.license,
 };
 
-/** Providers actually used in the dataset, for the footer credit. */
+/** Providers actually used in the dataset (temperatures or precipitation), for the footer credit. */
 export const CLIMATE_PROVIDERS: ClimateProvider[] = (() => {
-  const ids = new Set(Object.values(CLIMATE.sources ?? {}));
+  const ids = new Set([...Object.values(CLIMATE.sources ?? {}), ...Object.values(CLIMATE.precipSources ?? {})]);
   const list = [...ids].map((id) => PROVIDERS[id]).filter(Boolean);
   return list.length ? list : [FALLBACK];
 })();
@@ -86,10 +91,20 @@ export function climateProvider(placeId: number): ClimateProvider {
   return (id && PROVIDERS[id]) || FALLBACK;
 }
 
+/** A climate page's numbers as it displays them (whole °C, mm and days; sun to 0.1 h). */
+function displayedNumbers(months: MonthNormals[]): string {
+  const whole = (v: number | undefined) => (v === undefined ? null : Math.round(v));
+  return JSON.stringify(
+    months.map((m) => [whole(m.hi), whole(m.lo), whole(m.p), whole(m.pd), whole(m.sd), m.sun === undefined ? null : Math.round(m.sun * 10)])
+  );
+}
+
 /**
- * Places whose normals share an origin (a station or a grid cell) with a more
- * populous place. Their climate pages would repeat that place's numbers, so
- * they stay available but are `noindex` and left out of the sitemap.
+ * Places whose climate pages would show exactly the numbers of a more populous
+ * place with the same origin (station or grid cell). They stay available but
+ * are `noindex` and left out of the sitemap. A shared origin alone isn't
+ * enough: normals are lapse-corrected to each place's elevation, so a mountain
+ * resort and the valley town whose station it borrows get different numbers.
  */
 const SECONDARY_CLIMATE: Set<number> = (() => {
   const seen = new Set<string>();
@@ -97,9 +112,11 @@ const SECONDARY_CLIMATE: Set<number> = (() => {
   // PLACES is sorted by population, largest first.
   for (const place of PLACES) {
     const origin = CLIMATE.origins?.[String(place.id)];
-    if (!origin) continue;
-    if (seen.has(origin)) secondary.add(place.id);
-    else seen.add(origin);
+    const months = CLIMATE.data[String(place.id)];
+    if (!origin || !months) continue;
+    const key = `${origin}|${displayedNumbers(months)}`;
+    if (seen.has(key)) secondary.add(place.id);
+    else seen.add(key);
   }
   return secondary;
 })();

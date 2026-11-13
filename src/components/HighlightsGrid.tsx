@@ -84,7 +84,7 @@ export default function HighlightsGrid({
             ? ` · ${t.common.gusts.toLowerCase()} ${Math.round(convertSpeed(current.windGust, units))}`
             : ""
         }`}
-        visual={<CompassGauge degrees={current.windDir} color={accent} />}
+        visual={<CompassGauge degrees={current.windDir} color={accent} north={h.compass[0]} />}
       />
 
       <Tile

@@ -64,6 +64,8 @@ function naturalSlug(place, locale) {
 export function assignPlaceSlugs(places, previous) {
   const notes = [];
   for (const place of places) place.slug ??= {};
+  // Published slugs by current id, including those a re-issued id takes over.
+  const published = adoptReissuedIds(places, previous, notes);
 
   for (const locale of LOCALES) {
     const taken = new Set();
@@ -71,7 +73,7 @@ export function assignPlaceSlugs(places, previous) {
 
     // 1. Published slugs are fixed, even if the name behind them changed.
     for (const place of places) {
-      const old = previous.get(place.id)?.[locale];
+      const old = published.get(place.id)?.[locale];
       if (!old) continue;
       if (taken.has(key(place, old))) throw new Error(`Duplicate published slug ${locale}:${key(place, old)}`);
       place.slug[locale] = old;
@@ -84,7 +86,7 @@ export function assignPlaceSlugs(places, previous) {
 
     // 2. New places: the plain slug when it is free and unique among the new
     //    ones, otherwise a region (or id) suffix — on the new places only.
-    const fresh = places.filter((p) => !previous.get(p.id)?.[locale]);
+    const fresh = places.filter((p) => !published.get(p.id)?.[locale]);
     const groups = new Map();
     for (const place of fresh) {
       const k = key(place, naturalSlug(place, locale));
@@ -107,21 +109,60 @@ export function assignPlaceSlugs(places, previous) {
     }
   }
 
-  // A published URL only breaks when no place holds its slug any more. GeoNames
-  // occasionally re-issues an id; the new record then usually gets the same
-  // natural slug, and the URL keeps working.
-  const current = new Set(places.map((p) => p.id));
-  const holders = new Map(places.map((p) => [`${p.cc}/${p.slug.en}`, p]));
+  // Published URLs that will break: removed places, and places whose country
+  // changed (the country is part of the URL).
+  const byId = new Map(places.map((p) => [p.id, p]));
+  // Slug records some current place holds (its own or one it took over).
+  const held = new Set(places.map((p) => published.get(p.id)).filter(Boolean));
   for (const [id, slugs] of previous) {
-    if (current.has(id)) continue;
-    const holder = slugs.cc ? holders.get(`${slugs.cc}/${slugs.en}`) : undefined;
-    notes.push(
-      holder
-        ? `place #${id} (${slugs.en}) is now #${holder.id} "${holder.en}" — same URL, check it is the same place`
-        : `place #${id} (${slugs.en}) was removed — its published URLs will now 404`
-    );
+    const place = byId.get(id);
+    if (place) {
+      if (slugs.cc && slugs.cc !== place.cc) {
+        notes.push(
+          `place #${id} (${slugs.en}) moved from ${slugs.cc} to ${place.cc} — the country part of its URLs changes, so the old URLs will 404`
+        );
+      }
+    } else if (!held.has(slugs)) {
+      notes.push(`place #${id} (${slugs.en}) was removed — its published URLs will now 404`);
+    }
   }
   return notes;
+}
+
+/**
+ * GeoNames occasionally re-issues a place under a new id. When exactly one new
+ * place in the same country would have been published under a vanished id's
+ * slug, it takes over all of that id's slugs (every language, not just the one
+ * that matched), so none of its URLs change. Returns id → slugs for the current
+ * places, `previous` plus the adoptions.
+ *
+ * @param {Array<{ id: number, cc: string, en: string, cs: string, a1?: { en: string, cs?: string } }>} places
+ * @param {Map<number, { en: string, cs: string, cc?: string }>} previous
+ * @param {string[]} notes
+ */
+function adoptReissuedIds(places, previous, notes) {
+  const published = new Map(previous);
+  const current = new Set(places.map((p) => p.id));
+  const newcomers = places.filter((p) => !previous.has(p.id));
+  // Slugs a place could have been published under: plain or region-suffixed.
+  const forms = (place) => {
+    const natural = naturalSlug(place, "en");
+    const regions = [place.a1?.en, place.a1?.cs].map((r) => slugify(r ?? "")).filter(Boolean);
+    return [natural, ...regions.map((r) => `${natural}-${r}`)];
+  };
+
+  for (const [id, slugs] of previous) {
+    if (current.has(id) || !slugs.cc) continue;
+    const matches = newcomers.filter((p) => p.cc === slugs.cc && !published.has(p.id) && forms(p).includes(slugs.en));
+    if (matches.length === 1) {
+      const [place] = matches;
+      published.set(place.id, slugs);
+      notes.push(`place #${id} (${slugs.en}) is now #${place.id} "${place.en}" — kept its URLs, check it is the same place`);
+    } else if (matches.length > 1) {
+      notes.push(`place #${id} (${slugs.en}) may be one of ${matches.map((p) => `#${p.id}`).join(", ")} — ambiguous, not carried over`);
+    }
+  }
+  return published;
 }
 
 /**

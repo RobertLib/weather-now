@@ -93,7 +93,7 @@ export function climateDatasetSchema(opts: {
   description: string;
   path: string;
   /** Every upstream provider of the numbers (temperatures first). */
-  sources: Array<{ name: string; url: string; license: string }>;
+  sources: Array<{ name: string; url: string; license: string; licenseUrl?: string }>;
   period: string;
   lat: number;
   lon: number;
@@ -106,7 +106,14 @@ export function climateDatasetSchema(opts: {
     description: opts.description,
     url: absoluteUrl(opts.path),
     temporalCoverage: opts.period.replace("–", "/"),
-    license: opts.sources.map((s) => `${s.name}: ${s.license}`).join("; "),
+    // Google reads `license` as a URL or CreativeWork, not free text.
+    license: one(
+      opts.sources.map((s) => ({
+        "@type": "CreativeWork",
+        name: `${s.name}: ${s.license}`,
+        ...(s.licenseUrl ? { url: s.licenseUrl } : {}),
+      }))
+    ),
     isBasedOn: one(opts.sources.map((s) => s.url)),
     creator: one(opts.sources.map((s) => ({ "@type": "Organization", name: s.name }))),
     spatialCoverage: {

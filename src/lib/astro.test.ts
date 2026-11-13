@@ -4,11 +4,16 @@ import { daylightInfo, localNoonUtc, solstice, sunTimes } from "@/lib/astro";
 const at = (iso: string) => Date.parse(iso) / 1000;
 
 describe("sunTimes", () => {
-  it("matches published times for Prague at the June solstice (±5 min)", () => {
-    // Prague, 21 June 2026: sunrise 04:52 CEST, sunset 21:15 CEST.
-    const s = sunTimes(localNoonUtc("2026-06-21", 14.42), 50.08, 14.42);
-    expect(Math.abs(s.sunrise! - at("2026-06-21T02:52:00Z"))).toBeLessThan(300);
-    expect(Math.abs(s.sunset! - at("2026-06-21T19:15:00Z"))).toBeLessThan(300);
+  // Reference times from the NOAA solar calculator (which Open-Meteo agrees with).
+  it.each([
+    ["Prague, June solstice", "2026-06-21", 50.088, 14.4208, "2026-06-21T02:52:30Z", "2026-06-21T19:15:44Z"],
+    ["Prague, November", "2026-11-13", 50.088, 14.4208, "2026-11-13T06:11:54Z", "2026-11-13T15:20:37Z"],
+    ["Sydney, November", "2026-11-13", -33.87, 151.21, "2026-11-12T18:45:03Z", "2026-11-13T08:34:05Z"],
+    ["New York, November", "2026-11-13", 40.71, -74.01, "2026-11-13T11:40:32Z", "2026-11-13T21:39:38Z"],
+  ] as const)("matches NOAA within a minute: %s", (_, date, lat, lon, rise, set) => {
+    const s = sunTimes(localNoonUtc(date, lon), lat, lon);
+    expect(Math.abs(s.sunrise! - at(rise))).toBeLessThan(60);
+    expect(Math.abs(s.sunset! - at(set))).toBeLessThan(60);
   });
 
   it("reports polar night and midnight sun in Tromsø", () => {

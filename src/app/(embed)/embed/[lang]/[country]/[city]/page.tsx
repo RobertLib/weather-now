@@ -35,7 +35,11 @@ export default async function EmbedPage({ params }: { params: Params }) {
   const { place, country } = hit;
   const t = getDictionary(lang);
   const forecast = await getForecast(place.lat, place.lon);
-  const days = forecast ? upcomingDays(forecast).slice(0, 4) : [];
+  // Throwing (rather than rendering an error card) keeps ISR serving the last
+  // good widget while Open-Meteo is down; failed renders aren't cached, so the
+  // next request retries. A widget that was never rendered shows error.tsx.
+  if (!forecast) throw new Error(`Forecast for ${place.en} unavailable`);
+  const days = upcomingDays(forecast).slice(0, 4);
   const href = absoluteUrl(placePath(lang, country, place));
 
   return (
@@ -51,34 +55,28 @@ export default async function EmbedPage({ params }: { params: Params }) {
           </a>
         </div>
 
-        {forecast ? (
-          <>
-            <div className="mt-2 flex items-center gap-3">
-              <WeatherIcon code={forecast.current.code} night={!forecast.current.isDay} className="h-16 w-16" title={describe(t, forecast.current.code)} />
-              <div>
-                <p className="font-display tabular text-4xl leading-none font-bold">
-                  <Temp c={forecast.current.temp} />
-                </p>
-                <p className="text-sm text-white/85">{describe(t, forecast.current.code)}</p>
-              </div>
-            </div>
-            <ul className="mt-3 grid grid-cols-4 gap-1.5">
-              {days.map((d, i) => (
-                <li key={d.date} className="rounded-xl bg-white/12 px-1 py-1.5 text-center">
-                  <p className="text-[0.65rem] font-semibold text-white/80 capitalize">
-                    {i === 0 ? t.common.today : formatWeekday(d.time, forecast.timezone, lang, "short")}
-                  </p>
-                  <WeatherIcon code={d.code} className="mx-auto h-7 w-7" animated={false} />
-                  <p className="tabular text-xs font-bold">
-                    <Temp c={d.tempMax} /> <span className="font-normal text-white/70"><Temp c={d.tempMin} /></span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="mt-6 text-sm text-white/85">{t.errors.generic}</p>
-        )}
+        <div className="mt-2 flex items-center gap-3">
+          <WeatherIcon code={forecast.current.code} night={!forecast.current.isDay} className="h-16 w-16" title={describe(t, forecast.current.code)} />
+          <div>
+            <p className="font-display tabular text-4xl leading-none font-bold">
+              <Temp c={forecast.current.temp} />
+            </p>
+            <p className="text-sm text-white/85">{describe(t, forecast.current.code)}</p>
+          </div>
+        </div>
+        <ul className="mt-3 grid grid-cols-4 gap-1.5">
+          {days.map((d, i) => (
+            <li key={d.date} className="rounded-xl bg-white/12 px-1 py-1.5 text-center">
+              <p className="text-[0.65rem] font-semibold text-white/80 capitalize">
+                {i === 0 ? t.common.today : formatWeekday(d.time, forecast.timezone, lang, "short")}
+              </p>
+              <WeatherIcon code={d.code} className="mx-auto h-7 w-7" animated={false} />
+              <p className="tabular text-xs font-bold">
+                <Temp c={d.tempMax} /> <span className="font-normal text-white/70"><Temp c={d.tempMin} /></span>
+              </p>
+            </li>
+          ))}
+        </ul>
 
         <p className="mt-2 text-right text-[0.65rem] text-white/70">
           <a href={href} target="_blank" rel="noopener" className="hover:underline">

@@ -27,6 +27,13 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 const days = (n: number) => `${n} ${plural(n, "den", "dny", "dní")}`;
+/**
+ * Locative "in n days": `v 1 dni`, `ve 3 dnech`, `v 5 dnech`. The preposition
+ * follows how the number is read: ve dvou, třech, čtyřech, dvanácti, třinácti,
+ * čtrnácti, dvaceti… (forecasts never need more than 16 days).
+ */
+const inDays = (n: number) =>
+  `${[2, 3, 4, 12, 13, 14].includes(n) || (n >= 20 && n < 50) ? "ve" : "v"} ${n} ${n === 1 ? "dni" : "dnech"}`;
 const sunSentence = (sun: SunLine) =>
   "rise" in sun
     ? `Slunce vychází v ${sun.rise} a zapadá v ${sun.set}.`
@@ -100,6 +107,7 @@ const cs: Dictionary = {
     widget: "Widget s počasím zdarma",
     data: "Data o počasí:",
     climateData: "Klimatické normály:",
+    placesData: "Místa:",
     copyright: (year: number) => `© ${year} WeatherNow, Robert Libsansky.`,
     disclaimer:
       "Předpovědi a hodnocení zde mají informativní charakter. Výstrahy a varování před nebezpečným počasím vždy sledujte u národní meteorologické služby (v Česku ČHMÚ).",
@@ -417,7 +425,7 @@ const cs: Dictionary = {
       ["Od hodin po 14 dní", "Podrobná data hodinu po hodině na dva dny a denní výhled na dva týdny."],
       ["Lidskou řečí", "Co si obléct, kdy bude pršet a kdy je nejlepší vyrazit ven — ne jen čísla."],
       ["Klimatické průměry", "Teploty, srážky a slunce po měsících pro plánování cest dopředu."],
-      ["Bez reklam a registrace", "Rychlé stránky bez sledování; uložená místa zůstávají ve vašem prohlížeči."],
+      ["Bez reklam a registrace", "Rychlé stránky bez reklamních trackerů a cookies; uložená místa zůstávají ve vašem prohlížeči."],
     ],
   },
 
@@ -465,9 +473,7 @@ const cs: Dictionary = {
       month: (n: string, c: string, m: number) => `Počasí ${n} ${IN_MONTH[m]} — teploty, srážky, slunce | ${c}`,
     },
     desc: {
-      overview: (n: string, now: string) =>
-        `Počasí ${n} teď: ${now}. Předpověď po hodinách, výhled na 14 dní, kvalita ovzduší, východ a západ slunce.`,
-      overviewNoData: (n: string) =>
+      overview: (n: string) =>
         `Počasí ${n}: aktuální stav, předpověď po hodinách, výhled na 14 dní, kvalita ovzduší, východ a západ slunce.`,
       tomorrow: (n: string) =>
         `Počasí ${n} zítra: teplota po hodinách, šance srážek, vítr a UV index, k tomu východ a západ slunce.`,
@@ -519,7 +525,7 @@ const cs: Dictionary = {
         parts.push(`Zítra: ${p.tomorrow.cond.toLowerCase()}, ${T(p.tomorrow.hi)} / ${T(p.tomorrow.lo)}.`);
       if (p.week)
         parts.push(
-          `Během příštích ${p.week.days} dní se maxima pohybují mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C; ${p.week.wetDays === 0 ? "srážky se nečekají" : `srážky ${plural(p.week.wetDays, "přinese", "přinesou", "přinese")} ${days(p.week.wetDays)}`}. Nejtepleji: ${p.week.warmestLabel.replace(/\.$/, "")}.`
+          `Během příštích ${p.week.days} dní se maxima pohybují mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C; ${p.week.wetDays === 0 ? "srážky se nečekají" : `srážky se čekají ${inDays(p.week.wetDays)}`}. Nejtepleji: ${p.week.warmestLabel.replace(/\.$/, "")}.`
         );
       return parts.join(" ");
     },
@@ -537,7 +543,7 @@ const cs: Dictionary = {
       `Nejtepleji: ${p.warmestLabel} (${T(p.warmestHi)}), nejchladnější noc: ${p.coldestLabel} (${T(p.coldestLo)}). ` +
       (p.wetDays === 0
         ? "Žádný den by neměl přinést 1 mm srážek a více. "
-        : `Srážky 1 mm a více ${plural(p.wetDays, "přinese", "přinesou", "přinese")} ${days(p.wetDays)}, nejvíce: ${p.wettestLabel} (${mm(p.wettestPrecip)}). `) +
+        : `Srážky 1 mm a více se čekají ${inDays(p.wetDays)}, nejvíce: ${p.wettestLabel} (${mm(p.wettestPrecip)}). `) +
       (Math.abs(p.trend) < 2
         ? "Teploty zůstanou po celé období zhruba stejné."
         : p.trend > 0
@@ -613,7 +619,7 @@ const cs: Dictionary = {
       if (p.week)
         items.push([
           `${p.name}: jaká je předpověď na tento týden?`,
-          `Maxima během příštích ${p.week.days} dní mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C. Nejtepleji: ${p.week.warmestLabel} (${T(p.week.warmestHi)}); ${p.week.wetDays === 0 ? "žádný den by neměl být deštivý" : `srážky ${plural(p.week.wetDays, "může", "mohou", "může")} přinést ${days(p.week.wetDays)}`}.`,
+          `Maxima během příštích ${p.week.days} dní mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C. Nejtepleji: ${p.week.warmestLabel} (${T(p.week.warmestHi)}); ${p.week.wetDays === 0 ? "žádný den by neměl být deštivý" : `srážky mohou přijít ${inDays(p.week.wetDays)}`}.`,
         ]);
       if (p.sunrise && p.sunset)
         items.push([
@@ -634,7 +640,7 @@ const cs: Dictionary = {
         `${p.name}: bude během příštích ${p.days} dní pršet?`,
         p.wetDays === 0
           ? "Žádný den by neměl přinést 1 mm srážek a více."
-          : `Srážky 1 mm a více ${plural(p.wetDays, "přinese", "přinesou", "přinese")} ${days(p.wetDays)}, nejvíce: ${p.wettestLabel} (${mm(p.wettestPrecip)}).`,
+          : `Srážky 1 mm a více se čekají ${inDays(p.wetDays)}, nejvíce: ${p.wettestLabel} (${mm(p.wettestPrecip)}).`,
       ],
       [`${p.name}: který den bude nejtepleji?`, `Nejtepleji: ${p.warmestLabel}, maximum ${T(p.warmestHi)}.`],
       [`${p.name}: jak chladné budou noci?`, `Nejchladnější noc: ${p.coldestLabel}, minimum ${T(p.coldestLo)}.`],

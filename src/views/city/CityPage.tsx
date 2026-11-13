@@ -234,26 +234,12 @@ function monthProseInput(name: string, months: MonthNormals[], m: number, place:
  * Title and meta description of a city page. Shared by the metadata and the
  * page's WebPage markup so both describe the page the same way.
  */
-function cityTexts(
-  locale: Locale,
-  r: Resolved,
-  forecast: Forecast | null
-): { title: string; description: string } {
+function cityTexts(locale: Locale, r: Resolved): { title: string; description: string } {
   const t = getDictionary(locale);
   const name = r.place[locale];
   const cname = r.country[locale];
 
   switch (r.view) {
-    case "overview":
-      return {
-        title: t.city.meta.overview(name, cname),
-        description: forecast
-          ? t.city.desc.overview(
-              name,
-              `${Math.round(forecast.current.temp)} °C, ${describe(t, forecast.current.code).toLowerCase()}`
-            )
-          : t.city.desc.overviewNoData(name),
-      };
     case "climate":
       if (r.month !== undefined) {
         const m = r.climate![r.month];
@@ -274,9 +260,7 @@ function cityTexts(
 export async function cityMetadata(locale: Locale, params: CityParams): Promise<Metadata> {
   const r = resolve(locale, params);
   if (!r) return {};
-  // Only the overview description quotes live data; the fetch is shared with the page.
-  const forecast = r.view === "overview" ? await getForecast(r.place.lat, r.place.lon) : null;
-  const { title, description } = cityTexts(locale, r, forecast);
+  const { title, description } = cityTexts(locale, r);
 
   return pageMetadata({
     locale,
@@ -318,7 +302,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
 
   const pageSchema = placePageSchema({
     title: month !== undefined ? t.city.h1.month(name, month) : t.city.h1[view](name),
-    description: cityTexts(locale, r, forecast).description,
+    description: cityTexts(locale, r).description,
     path: placePath(locale, country, place, view, month),
     language: locale,
     place: {

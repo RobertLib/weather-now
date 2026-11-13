@@ -132,7 +132,16 @@ export default function Footer({ locale }: { locale: Locale }) {
                   {p.name}
                 </a>
               </span>
-            ))}
+            ))}{" "}
+            · {t.footer.placesData}{" "}
+            <a href="https://www.geonames.org/" target="_blank" rel="noopener" className="underline hover:text-white">
+              GeoNames
+            </a>{" "}
+            (
+            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" className="underline hover:text-white">
+              CC BY 4.0
+            </a>
+            )
           </p>
           <p className="text-sm text-slate-400">{t.footer.copyright(new Date().getFullYear())}</p>
           <p className="mx-auto max-w-2xl text-xs text-slate-500">{t.footer.disclaimer}</p>

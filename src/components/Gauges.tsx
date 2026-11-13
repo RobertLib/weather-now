@@ -60,10 +60,13 @@ export function RingGauge({
 export function CompassGauge({
   degrees,
   color,
+  north = "N",
   size = 76,
 }: {
   degrees: number;
   color: string;
+  /** Label of the north mark in the page's language. */
+  north?: string;
   size?: number;
 }) {
   return (
@@ -98,7 +101,7 @@ export function CompassGauge({
         textAnchor="middle"
         className="fill-slate-500 text-[0.55rem] font-bold dark:fill-slate-400"
       >
-        N
+        {north}
       </text>
       <g
         transform={`rotate(${degrees + 180} 40 40)`}

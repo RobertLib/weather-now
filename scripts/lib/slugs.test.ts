@@ -56,6 +56,34 @@ describe("assignPlaceSlugs", () => {
     expect(notes).toEqual([expect.stringContaining("is now #8")]);
   });
 
+  it("carries every language's slug over to a re-issued id, even after a rename", () => {
+    const places = [{ id: 8, cc: "DE", en: "Munich", cs: "München" }] as Input[];
+    const notes = assignPlaceSlugs(places, new Map([[7, { en: "munich", cs: "mnichov", cc: "DE" }]]));
+    expect(places[0].slug).toEqual({ en: "munich", cs: "mnichov" });
+    expect(notes.some((n) => n.includes("is now #8"))).toBe(true);
+    expect(notes.some((n) => n.includes("404"))).toBe(false);
+  });
+
+  it("recognises a re-issued id behind a region-suffixed slug", () => {
+    const places = [{ id: 9, cc: "US", en: "Portland", cs: "Portland", a1: { en: "Maine" } }] as Input[];
+    assignPlaceSlugs(places, new Map([[3, { en: "portland-maine", cs: "portland-maine", cc: "US" }]]));
+    expect(places[0].slug).toEqual({ en: "portland-maine", cs: "portland-maine" });
+  });
+
+  it("doesn't guess when several new places could be the re-issued one", () => {
+    const places = [place(8, "Austin", "Austin", "Texas"), place(9, "Austin", "Austin", "Minnesota")];
+    const notes = assignPlaceSlugs(places, new Map([[7, { en: "austin", cs: "austin", cc: "US" }]]));
+    expect(notes.some((n) => n.includes("ambiguous"))).toBe(true);
+    expect(notes.some((n) => n.includes("#7 (austin) was removed"))).toBe(true);
+  });
+
+  it("reports a place whose country changed, since its URLs change too", () => {
+    const places = [{ id: 5, cc: "RS", en: "Pristina", cs: "Priština" }] as Input[];
+    const notes = assignPlaceSlugs(places, new Map([[5, { en: "pristina", cs: "pristina", cc: "XK" }]]));
+    expect(places[0].slug).toEqual({ en: "pristina", cs: "pristina" });
+    expect(notes).toEqual([expect.stringContaining("moved from XK to RS")]);
+  });
+
   it("falls back to the English name, then the id, for names that fold to nothing", () => {
     const places = [place(1, "Tokyo", "東京"), place(2, "東京", "東京")];
     assignPlaceSlugs(places, new Map());

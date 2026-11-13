@@ -85,6 +85,17 @@ describe("place data", () => {
     expect(isClimateIndexed(PLACES.find((p) => p.cc === "CZ" && p.slug.en === "prague")!.id)).toBe(true);
   });
 
+  it("noindexes a climate page only when a bigger place shows the same numbers", () => {
+    const shown = (id: number) =>
+      JSON.stringify(getClimate(id)!.map((m) => [Math.round(m.hi), Math.round(m.lo), Math.round(m.p)]));
+    const orphans = PLACES.flatMap((place, i) => {
+      if (isClimateIndexed(place.id)) return [];
+      const twin = PLACES.slice(0, i).find((p) => isClimateIndexed(p.id) && shown(p.id) === shown(place.id));
+      return twin ? [] : [place.en];
+    });
+    expect(orphans).toEqual([]);
+  });
+
   it("finds every hand-picked popular city", () => {
     for (const locale of LOCALES) {
       expect(popularPlaces(locale)).toHaveLength(POPULAR[locale].length);

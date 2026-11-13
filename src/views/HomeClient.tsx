@@ -6,15 +6,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { PlaceLabels, PlaceRef } from "@/types/weather";
 import { searchLocations } from "@/lib/openmeteo";
-import { resolvePlaceHref } from "@/lib/navigation-client";
+import { placeFromQuery, resolvePlaceHref } from "@/lib/navigation-client";
 import { localizePlace } from "@/lib/places-client";
 import { favoriteId } from "@/lib/favorites";
+import { DEFAULT_THEME } from "@/lib/conditions";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useI18n } from "@/i18n/client";
 import SearchBar from "@/components/SearchBar";
 import FavoritesBar from "@/components/FavoritesBar";
 import WeatherDashboard, { LAST_PLACE_KEY } from "@/components/WeatherDashboard";
 import WeatherSkeleton from "@/components/WeatherSkeleton";
+import WeatherBackground from "@/components/WeatherBackground";
 import ErrorMessage from "@/components/ErrorMessage";
 
 type State = { status: "resolving" } | { status: "ready"; place: PlaceRef } | { status: "empty" };
@@ -31,6 +33,9 @@ export default function HomeClient() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      {/* The dashboard paints the sky from the conditions once it shows a
+          place; until then (and in the static HTML) the neutral sky. */}
+      {activeId === null && <WeatherBackground theme={DEFAULT_THEME} />}
       <SearchBar onError={setError} />
       <FavoritesBar activeId={activeId} />
       {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
@@ -63,14 +68,13 @@ function HomeDashboard({ onPlace }: { onPlace: (favoriteId: string | null) => vo
 
     (async () => {
       const params = new URLSearchParams(query);
-      const lat = Number(params.get("lat"));
-      const lon = Number(params.get("lon"));
+      const linked = placeFromQuery(params);
       const q = params.get("q");
 
-      if (params.has("lat") && params.has("lon") && Number.isFinite(lat) && Number.isFinite(lon)) {
+      if (linked) {
         return settle({
           status: "ready",
-          place: { name: params.get("name") || t.search.yourLocation, cc: params.get("cc") ?? "", lat, lon },
+          place: { name: linked.name ?? t.search.yourLocation, cc: linked.cc ?? "", lat: linked.lat, lon: linked.lon },
         });
       }
 

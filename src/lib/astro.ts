@@ -89,7 +89,6 @@ const RAD = Math.PI / 180;
 const DAY_MS = 86_400_000;
 const J1970 = 2440588;
 const J2000 = 2451545;
-const J0 = 0.0009;
 const OBLIQUITY = RAD * 23.4397;
 
 const toDays = (ms: number) => ms / DAY_MS - 0.5 + J1970 - J2000;
@@ -106,7 +105,12 @@ const eclipticLongitude = (m: number, d: number) =>
   RAD * (1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m)) +
   RAD * (102.9372 + 0.0000470935 * d) +
   Math.PI;
-const approxTransit = (ht: number, lw: number, n: number) => J0 + (ht + lw) / (2 * Math.PI) + n;
+/**
+ * Mean solar transit, in days after J2000. SunCalc adds J0 = 0.0009 days here,
+ * which puts every sunrise and sunset ~78 s late against NOAA and Open-Meteo;
+ * without it the times agree with NOAA to well under a minute.
+ */
+const approxTransit = (ht: number, lw: number, n: number) => (ht + lw) / (2 * Math.PI) + n;
 const solarTransit = (ds: number, m: number, l: number) =>
   J2000 + ds + 0.0053 * Math.sin(m) - 0.0069 * Math.sin(2 * l);
 
@@ -127,7 +131,7 @@ export function sunTimes(middayUtcMs: number, lat: number, lon: number): SunTime
   const lw = RAD * -lon;
   const phi = RAD * lat;
   const d = toDays(middayUtcMs);
-  const n = Math.round(d - J0 - lw / (2 * Math.PI));
+  const n = Math.round(d - lw / (2 * Math.PI));
   const ds = approxTransit(0, lw, n);
   const m = meanAnomaly(ds);
   const l = eclipticLongitude(m, ds);

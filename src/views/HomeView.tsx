@@ -6,8 +6,6 @@ import { CONTINENT_ORDER, COUNTRIES, getCountry, placesIn, popularPlaces } from 
 import { countryPath, homePath, placePath, worldPath } from "@/lib/routes";
 import { pageMetadata } from "@/lib/seo";
 import { getSnapshots } from "@/lib/server-data";
-import { DEFAULT_THEME } from "@/lib/conditions";
-import WeatherBackground from "@/components/WeatherBackground";
 import WeatherIcon from "@/components/WeatherIcon";
 import { Temp } from "@/components/Units";
 import { ThemeToggle, UnitToggle } from "@/components/Toggles";
@@ -40,7 +38,7 @@ export async function HomeView({ locale }: { locale: Locale }) {
 
   return (
     <>
-      <WeatherBackground theme={DEFAULT_THEME} />
+      {/* The sky backdrop is painted by HomeClient (neutral, or the live dashboard's). */}
       <div className="px-3 pt-5 pb-12 sm:px-4 sm:pt-8">
         <div className="mx-auto max-w-5xl space-y-4 sm:space-y-5">
           <header className="flex flex-wrap items-end justify-between gap-3">

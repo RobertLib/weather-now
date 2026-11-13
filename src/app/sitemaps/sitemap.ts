@@ -23,7 +23,7 @@ import {
 export const SITEMAP_IDS = ["pages", "en", "cs"] as const;
 
 /** When the static datasets (places, climate) were last regenerated. */
-const DATA_UPDATED = new Date("2026-11-12");
+const DATA_UPDATED = new Date("2026-11-13");
 
 export function generateSitemaps() {
   return SITEMAP_IDS.map((id) => ({ id }));

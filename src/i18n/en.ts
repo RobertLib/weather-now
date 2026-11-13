@@ -159,6 +159,7 @@ const en = {
     widget: "Free weather widget",
     data: "Weather data by",
     climateData: "Climate normals:",
+    placesData: "Places:",
     copyright: (year: number) => `© ${year} WeatherNow by Robert Libsansky.`,
     disclaimer:
       "Forecasts and ratings shown here are informational. Always check your national weather service for warnings and severe-weather alerts.",
@@ -477,7 +478,7 @@ const en = {
       ["Hourly to 14 days", "Detailed hour-by-hour data for two days and a daily outlook for two weeks."],
       ["Plain language", "What to wear, when it will rain and the best hour to go outside — not just numbers."],
       ["Climate averages", "Monthly temperatures, rainfall and sunshine to plan trips months ahead."],
-      ["No ads, no account", "Fast pages, no trackers, and your saved places stay in your browser."],
+      ["No ads, no account", "Fast pages, no ad trackers or cookies, and your saved places stay in your browser."],
     ] as Array<[string, string]>,
   },
 
@@ -527,9 +528,9 @@ const en = {
       month: (n: string, c: string, m: number) => `${n} Weather in ${MONTHS[m]} — Temperature, Rain & Sun | ${c}`,
     },
     desc: {
-      overview: (n: string, now: string) =>
-        `${n} weather now: ${now}. Hourly forecast, 14-day outlook, air quality, sunrise and sunset times.`,
-      overviewNoData: (n: string) =>
+      // No live numbers: search engines keep a snippet for days, long after a
+      // quoted "current" temperature has changed.
+      overview: (n: string) =>
         `${n} weather now, hourly forecast, 14-day outlook, air quality, sunrise and sunset times.`,
       tomorrow: (n: string) =>
         `Weather in ${n} tomorrow: hour-by-hour temperature, rain chance, wind and UV, plus sunrise and sunset.`,

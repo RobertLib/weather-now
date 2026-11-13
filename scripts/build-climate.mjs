@@ -38,17 +38,19 @@
  * `precipSources` (only for places whose precipitation comes from the other
  * provider) and `origins`, which identifies where the temperature normals come
  * from ("meteostat:<station id>" or "power:<lat>,<lon>" of the grid-cell centre).
- * Places sharing an origin have identical temperature normals before the
- * elevation shift.
+ * Places sharing an origin start from the same station or cell, but each is
+ * lapse-corrected to its own elevation, and daily-derived normals are also
+ * adjusted by each place's own POWER cell, so their numbers can still differ.
  *
  * Usage:
  *   DATA_CACHE_DIR=/path/to/cache node scripts/build-climate.mjs
+ *   DATA_RETRY_404=1 node scripts/build-climate.mjs   # re-check cached 404s
  *
  * Downloads are cached in DATA_CACHE_DIR (default: <repo>/.cache/data, which is
  * git-ignored), so an interrupted run resumes and re-runs are offline.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -115,6 +117,15 @@ const MIN_YEARS_SHORT_RECORD = 5;
 const MAX_TEMP_DISAGREEMENT_C = 5;
 const MAX_TEMP_DISAGREEMENT_DOUBTFUL_C = 8;
 const MAX_PRECIP_RATIO = 2;
+/**
+ * Published precipitation normals are trusted as they are (POWER is often far
+ * off in the tropics: Yangon, Santo Domingo, Kathmandu), unless the station sits
+ * more than this far above or below the place. Precipitation isn't
+ * elevation-corrected, and orographic rain or a rain shadow can then double or
+ * halve it (Port Louis took 1917 mm/yr from Vacoas, 420 m up on the plateau), so
+ * such a station must also agree with POWER within MAX_PRECIP_RATIO.
+ */
+const MAX_PRECIP_ELEVATION_DIFF_M = 250;
 
 /**
  * The second station pass (see placeClimate) extends to EXTENDED_DISTANCE_KM
@@ -231,20 +242,29 @@ async function throttle(host) {
 const inFlight = new Map();
 
 /**
+ * A 404 is cached as a `.404` marker so offline re-runs stay offline. Meteostat
+ * answers 404 for stations without a file, which is permanent; a transient 404
+ * would stick, though, so DATA_RETRY_404=1 asks again.
+ */
+const RETRY_404 = process.env.DATA_RETRY_404 === "1";
+
+/**
  * Download `url` into the cache (gzip-compressed unless already .gz) and return
  * the decompressed text, or null for 404. Throttled per host and retried.
+ * `valid(text)`, when given, vets a 200 response before it is cached: one that
+ * fails is returned for this run but not stored, so the next run asks again.
  */
-function cachedText(url, relativeFile) {
+function cachedText(url, relativeFile, valid) {
   const file = path.join(CACHE_DIR, relativeFile);
   if (!inFlight.has(file)) {
-    inFlight.set(file, fetchCached(url, file).finally(() => inFlight.delete(file)));
+    inFlight.set(file, fetchCached(url, file, valid).finally(() => inFlight.delete(file)));
   }
   return inFlight.get(file);
 }
 
-async function fetchCached(url, file) {
+async function fetchCached(url, file, valid) {
   const missing = `${file}.404`;
-  if (existsSync(missing)) return null;
+  if (existsSync(missing) && !RETRY_404) return null;
   if (existsSync(file)) return gunzipSync(await readFile(file)).toString("utf8");
 
   const host = new URL(url).host;
@@ -262,7 +282,12 @@ async function fetchCached(url, file) {
       const body = Buffer.from(await res.arrayBuffer());
       const gz = url.endsWith(".gz") ? body : gzipSync(body);
       const text = gunzipSync(gz).toString("utf8"); // validates the archive
+      if (valid && !valid(text)) {
+        console.warn(`  ! ${url}: unexpected response – used for this run only, not cached`);
+        return text;
+      }
       await writeFile(file, gz);
+      if (existsSync(missing)) await rm(missing);
       return text;
     } catch (error) {
       if (error.fatal || attempt >= 6) throw error;
@@ -747,6 +772,16 @@ function powerCell(lat, lon) {
   return `${fmt(cLat)},${fmt(cLon)}`;
 }
 
+/** Whether a POWER response carries every requested parameter (worth caching). */
+function isCompletePowerResponse(text) {
+  try {
+    const parameter = JSON.parse(text).properties?.parameter;
+    return POWER_PARAMETERS.every((p) => parameter?.[p] && Object.keys(parameter[p]).length > 0);
+  } catch {
+    return false;
+  }
+}
+
 /** Monthly means from POWER daily data, lapse-rate corrected to the place elevation. */
 async function powerClimate(place) {
   const lat = place.lat.toFixed(4);
@@ -756,7 +791,7 @@ async function powerClimate(place) {
     `&longitude=${lon}&latitude=${lat}&start=${PERIOD_START}0101&end=${PERIOD_END}1231&format=JSON`;
   // The cache key spells out everything that shapes the response.
   const file = `power/${POWER_COMMUNITY}_${POWER_PARAMETERS.join("-")}_${PERIOD_START}-${PERIOD_END}/${lat}_${lon}.json.gz`;
-  const text = await cachedText(url, file);
+  const text = await cachedText(url, file, isCompletePowerResponse);
   if (!text) return null;
   const json = JSON.parse(text);
   const parameter = json.properties?.parameter;
@@ -843,7 +878,7 @@ function similarSetting({ s, d, dz }, doubt) {
  * returns { months, source, precipSource, origin, ... } or null (no data).
  * `log` collects the human-readable trace.
  */
-async function placeClimate(place, { stations, lastResortStations }, power, log) {
+async function placeClimate(place, { stations, shortRecordStations, lastResortStations }, power, log) {
   const near = rankStations(stations, place, MAX_DISTANCE_KM);
   const describe = ({ s, d, dz }) => `${s.id} ${s.name}, ${d.toFixed(1)} km, Δh ${signed(dz, 0)} m`;
 
@@ -880,7 +915,11 @@ async function placeClimate(place, { stations, lastResortStations }, power, log)
       `no station with ≥ ${MIN_YEARS_NORMAL} years – trying shorter records (≥ ${MIN_YEARS_SHORT_RECORD} years)` +
         (doubt ? `, up to ${EXTENDED_DISTANCE_KM} km and Δh ${doubt.maxDz} m, since ${doubt.reason}` : "")
     );
-    const candidates = doubt ? rankStations(stations, place, EXTENDED_DISTANCE_KM, doubt.maxDz) : near;
+    // The regular pool only has stations whose record can cover MIN_YEARS_NORMAL,
+    // so shorter records need their own pool.
+    const candidates = doubt
+      ? rankStations(shortRecordStations, place, EXTENDED_DISTANCE_KM, doubt.maxDz)
+      : rankStations(shortRecordStations, place, MAX_DISTANCE_KM);
     temp = await findTemps(candidates, MIN_YEARS_SHORT_RECORD);
     secondPass = Boolean(temp);
   }
@@ -903,22 +942,30 @@ async function placeClimate(place, { stations, lastResortStations }, power, log)
   // Precipitation is not elevation-corrected and varies over short distances, so it
   // only comes from regular candidates (near): the temperature station if it is one
   // of them, else the next one with a complete record, else POWER. Daily-derived
-  // totals must agree with POWER.
+  // totals must agree with POWER; so must published ones from a station far above
+  // or below the place (see MAX_PRECIP_ELEVATION_DIFF_M).
   const isNear = (c) => near.some((n) => n.s.id === c.s.id);
-  const precipUsable = (sc) => {
+  const precipUsable = (c, sc) => {
     if (!sc.prcp) return false;
-    if (sc.prcpFrom !== "daily" || !power) return true;
-    const ratio = sum(sc.prcp) / Math.max(sum(power.months.map((m) => m.p)), 1);
+    if (!power) return true;
+    const daily = sc.prcpFrom === "daily";
+    if (!daily && Math.abs(c.dz) <= MAX_PRECIP_ELEVATION_DIFF_M) return true;
+    const station = sum(sc.prcp);
+    const grid = sum(power.months.map((m) => m.p));
+    const ratio = station / Math.max(grid, 1);
     if (ratio >= 1 / MAX_PRECIP_RATIO && ratio <= MAX_PRECIP_RATIO) return true;
-    log(`- ${sc.station.id}: daily-derived precipitation ${sum(sc.prcp).toFixed(0)} mm/yr vs POWER ${sum(power.months.map((m) => m.p)).toFixed(0)} – not used`);
+    log(
+      `- ${sc.station.id}: ${daily ? "daily-derived" : `published (Δh ${signed(c.dz, 0)} m)`} precipitation ` +
+        `${station.toFixed(0)} mm/yr vs POWER ${grid.toFixed(0)} – not used`
+    );
     return false;
   };
-  let precip = temp && isNear(temp) && precipUsable(temp.sc) ? temp : null;
+  let precip = temp && isNear(temp) && precipUsable(temp, temp.sc) ? temp : null;
   if (!precip) {
     for (const c of near) {
       if (c.s.id === temp?.s.id) continue;
       const sc = await stationClimate(c.s, power);
-      if (precipUsable(sc)) {
+      if (precipUsable(c, sc)) {
         precip = { ...c, sc };
         break;
       }
@@ -978,8 +1025,9 @@ async function main() {
   console.log(`cache: ${CACHE_DIR}`);
   const places = JSON.parse(await readFile(PLACES_FILE, "utf8"));
   // Regular pool (published normals or a daily series that can cover MIN_YEARS_NORMAL),
-  // and the wider pool of the last-resort pass.
+  // and the wider pools of the second and last-resort passes.
   const stations = await loadStations(MIN_YEARS_NORMAL);
+  const shortRecordStations = await loadStations(MIN_YEARS_SHORT_RECORD);
   const lastResortStations = await loadStations(MIN_YEARS_LAST_RESORT);
   console.log(
     `${places.length} places, ${stations.length} stations with ${PERIOD_START}–${PERIOD_END} normals or daily data ` +
@@ -1007,7 +1055,7 @@ async function main() {
     const label = `${place.en} (${place.cc}, #${place.id}, ${place.ele} m)`;
     console.log(`[${index + 1}/${places.length}] ${label}`);
     const power = powerById.get(place.id);
-    const result = await placeClimate(place, { stations, lastResortStations }, power, (line) => console.log(`    ${line}`));
+    const result = await placeClimate(place, { stations, shortRecordStations, lastResortStations }, power, (line) => console.log(`    ${line}`));
     if (!result) {
       console.log("    no usable data – omitted");
       omitted.push(label);
