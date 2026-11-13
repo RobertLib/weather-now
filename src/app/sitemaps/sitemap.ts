@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { DEFAULT_LOCALE, LOCALES, Locale } from "@/i18n/config";
 import { COUNTRIES, PLACES, getCountry, isCountryHubIndexed } from "@/lib/places";
-import { getClimate, isClimateIndexed } from "@/lib/climate";
+import { CLIMATE_UPDATED, getClimate, isClimateIndexed } from "@/lib/climate";
 import {
   CITY_VIEWS,
   CityView,
@@ -22,8 +22,8 @@ import {
 
 export const SITEMAP_IDS = ["pages", "en", "cs"] as const;
 
-/** When the static datasets (places, climate) were last regenerated. */
-const DATA_UPDATED = new Date("2026-11-13");
+/** Climate pages change only when the normals do (see `updated` in climate.json). */
+const climateLastmod = CLIMATE_UPDATED ? { lastModified: CLIMATE_UPDATED } : {};
 
 export function generateSitemaps() {
   return SITEMAP_IDS.map((id) => ({ id }));
@@ -79,11 +79,11 @@ export default async function sitemap(props: { id: Promise<string> }): Promise<M
     });
     return [
       ...views.map((view) =>
-        entry(at(view), locale, view === "climate" ? { lastModified: DATA_UPDATED } : {})
+        entry(at(view), locale, view === "climate" ? climateLastmod : {})
       ),
       ...(climate
         ? Array.from({ length: 12 }, (_, m) =>
-            entry(at("climate", m), locale, { lastModified: DATA_UPDATED })
+            entry(at("climate", m), locale, climateLastmod)
           )
         : []),
     ];

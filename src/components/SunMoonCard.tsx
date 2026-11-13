@@ -17,6 +17,8 @@ interface SunMoonCardProps {
   tz: string;
   daylight: DaylightInfo;
   theme: SkyTheme;
+  /** South of the equator the moon is seen mirrored: it waxes from the left. */
+  southern?: boolean;
   delay?: number;
 }
 
@@ -27,6 +29,7 @@ export default function SunMoonCard({
   tz,
   daylight,
   theme,
+  southern = false,
   delay = 0,
 }: SunMoonCardProps) {
   const { t, locale } = useI18n();
@@ -68,7 +71,7 @@ export default function SunMoonCard({
       </p>
 
       <div className="mt-4 flex items-center gap-3 border-t border-slate-900/8 pt-4 dark:border-white/10">
-        <MoonDisc fraction={moon.fraction} />
+        <MoonDisc fraction={moon.fraction} southern={southern} />
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-sm font-semibold">
             <Moon className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
@@ -154,7 +157,7 @@ function SunArc({
   );
 }
 
-function MoonDisc({ fraction }: { fraction: number }) {
+function MoonDisc({ fraction, southern }: { fraction: number; southern: boolean }) {
   const uid = useId().replace(/:/g, "");
   const r = 20;
   const cx = 24;
@@ -190,7 +193,12 @@ function MoonDisc({ fraction }: { fraction: number }) {
         r={r}
         className="fill-slate-800/25 dark:fill-slate-950/60"
       />
-      <path d={litPath} fill={`url(#${uid}-lit)`} />
+      {/* Drawn as seen from the northern hemisphere, mirrored for the southern. */}
+      <path
+        d={litPath}
+        fill={`url(#${uid}-lit)`}
+        transform={southern ? `matrix(-1 0 0 1 ${2 * cx} 0)` : undefined}
+      />
       <circle
         cx={cx}
         cy={cy}

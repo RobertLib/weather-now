@@ -3,6 +3,7 @@
   "sourceUrl": "https://meteostat.net/",
   "license": "Meteostat: CC BY-NC 4.0; NASA POWER: public domain (no restrictions)",
   "period": "1991–2020",
+  "updated": "2026-11-13",
   "sources": {
     "-202987422": "meteostat",
     "-162209899": "meteostat",

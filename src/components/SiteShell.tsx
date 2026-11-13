@@ -1,7 +1,7 @@
 import { Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { I18nProvider } from "@/i18n/client";
-import { themeBootstrapScript } from "@/hooks/useTheme";
+import { themeBootstrapScript } from "@/lib/theme";
 import { websiteSchema } from "@/lib/schema";
 import { geistSans, outfit } from "@/app/fonts";
 import Navigation from "./Navigation";

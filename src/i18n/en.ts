@@ -1,3 +1,5 @@
+import { signed } from "@/lib/units";
+
 /**
  * English dictionary. `cs.ts` must provide the same shape (enforced by the
  * `Dictionary` type). Functions receive pre-formatted times and raw numbers in
@@ -6,9 +8,11 @@
 
 const r = (n: number) => Math.round(n);
 const f = (c: number) => Math.round((c * 9) / 5 + 32);
-const T = (c: number) => `${r(c)} °C (${f(c)} °F)`;
+/** A rounded temperature with a real minus sign. */
+const deg = (c: number) => signed(Math.round(c));
+const T = (c: number) => `${deg(c)} °C (${signed(f(c))} °F)`;
 /** For use inside parentheses, where nested brackets would read badly. */
-const T2 = (c: number) => `${r(c)} °C / ${f(c)} °F`;
+const T2 = (c: number) => `${deg(c)} °C / ${signed(f(c))} °F`;
 const pct = (p: number) => `${r(p * 100)}%`;
 const mm = (v: number) => `${v < 10 ? v.toFixed(1) : r(v)} mm`;
 const kmh = (ms: number) => `${r(ms * 3.6)} km/h`;
@@ -121,6 +125,8 @@ export interface MonthProse {
   rhi?: number;
   rlo?: number;
   daylight: string;
+  /** Set when the sun doesn't rise or set mid-month; `daylight` is then 0 min or 24 h. */
+  polar: "day" | "night" | null;
   prevHi: number;
   prevMonth: number;
   verdict: "great" | "good" | "fair" | "poor";
@@ -133,6 +139,8 @@ const en = {
     description:
       "Accurate hourly and 14-day weather forecasts, air quality, sunrise times and climate averages for cities worldwide. Fast, free and ad-free.",
     ogAlt: "WeatherNow — real-time weather forecasts",
+    appName: "WeatherNow — Weather Forecasts",
+    appDescription: "Hourly and 14-day weather forecasts, air quality and climate averages for cities worldwide.",
   },
 
   nav: {
@@ -452,7 +460,7 @@ const en = {
     SA: "South America",
     AF: "Africa",
     OC: "Oceania",
-  } as Record<string, string>,
+  },
 
   months: MONTHS,
   inMonth: (m: number) => `in ${MONTHS[m]}`,
@@ -515,7 +523,7 @@ const en = {
       "air-quality": "Air quality",
       "sunrise-sunset": "Sunrise & sunset",
       climate: "Climate",
-    } as Record<string, string>,
+    },
     tabsAria: "Forecast views",
     meta: {
       overview: (n: string, c: string) => `${n} Weather Forecast — Hourly & 14-Day | ${c}`,
@@ -545,7 +553,7 @@ const en = {
       climate: (n: string, p: ClimateProse) =>
         `Climate of ${n}: average temperatures, rainfall and sunshine by month. Warmest month ${MONTHS[p.warmest]}, best time to visit ${list(p.best.map((m) => MONTHS[m]))}.`,
       month: (n: string, m: number, hi: number, lo: number, p: number) =>
-        `What's the weather like in ${n} in ${MONTHS[m]}? Average high ${r(hi)} °C, low ${r(lo)} °C, ${mm(p)} of precipitation. Plus what to pack.`,
+        `What's the weather like in ${n} in ${MONTHS[m]}? Average high ${deg(hi)} °C, low ${deg(lo)} °C, ${mm(p)} of precipitation. Plus what to pack.`,
     },
     h1: {
       overview: (n: string) => `${n} weather`,
@@ -584,7 +592,7 @@ const en = {
         );
       if (p.week)
         parts.push(
-          `Over the next ${p.week.days} days highs range from ${r(p.week.hiMin)} to ${r(p.week.hiMax)} °C, with ${p.week.wetDays === 0 ? "no wet days" : days(p.week.wetDays) + " of rain or snow"} expected; ${p.week.warmestLabel} looks warmest.`
+          `Over the next ${p.week.days} days highs range from ${deg(p.week.hiMin)} to ${deg(p.week.hiMax)} °C, with ${p.week.wetDays === 0 ? "no wet days" : days(p.week.wetDays) + " of rain or snow"} expected; ${p.week.warmestLabel} looks warmest.`
         );
       return parts.join(" ");
     },
@@ -628,12 +636,16 @@ const en = {
       (p.frostMonths > 0 ? `Nights drop below freezing on average in ${p.frostMonths} ${p.frostMonths === 1 ? "month" : "months"} of the year. ` : "Average lows stay above freezing all year. ") +
       `For comfortable weather, the best time to visit is ${list(p.best.map((m) => MONTHS[m]))}.`,
     month: (p: MonthProse) =>
-      `In ${MONTHS[p.month]}, ${p.name} typically sees daytime highs of ${T(p.hi)} and night-time lows of ${T(p.lo)}` +
+      (`In ${MONTHS[p.month]}, ${p.name} typically sees daytime highs of ${T(p.hi)} and night-time lows of ${T(p.lo)}` +
       `${Math.abs(p.hi - p.prevHi) >= 1 ? ` — ${p.hi > p.prevHi ? "warmer" : "cooler"} than ${MONTHS[p.prevMonth]} by about ${r(Math.abs(p.hi - p.prevHi))} °C` : ""}. ` +
       `Expect around ${mm(p.p)} of precipitation${p.pd === undefined ? "" : p.pd < 0.5 ? ", and rainy days are rare" : ` spread over roughly ${days(r(p.pd))} with at least 1 mm`}` +
       `${p.sd !== undefined && p.sd >= 0.5 ? `, and snow falls on about ${days(r(p.sd))}` : ""}. ` +
-      `${p.sun !== undefined ? `The sun shines for about ${r(p.sun)} ${r(p.sun) === 1 ? "hour" : "hours"} a day, and days are` : "Days are"} ${p.daylight} long mid-month. ` +
-      `${p.rhi !== undefined && p.rlo !== undefined ? `Extremes in recent decades ranged from ${T(p.rlo)} to ${T(p.rhi)}.` : ""}`,
+      (p.polar === "night"
+        ? "By mid-month the sun doesn't rise at all (polar night). "
+        : p.polar === "day"
+          ? "By mid-month the sun doesn't set at all (midnight sun). "
+          : `${p.sun !== undefined ? `The sun shines for about ${r(p.sun)} ${r(p.sun) === 1 ? "hour" : "hours"} a day, and days are` : "Days are"} ${p.daylight} long mid-month. `) +
+      `${p.rhi !== undefined && p.rlo !== undefined ? `Extremes in recent decades ranged from ${T(p.rlo)} to ${T(p.rhi)}.` : ""}`).trim(),
     verdicts: {
       great: (n: string, m: number) => `${MONTHS[m]} is one of the best months to visit ${n} — mild, comfortable weather for sightseeing.`,
       good: (n: string, m: number) => `${MONTHS[m]} is a good time to visit ${n}; the weather is mostly pleasant.`,
@@ -647,7 +659,7 @@ const en = {
       layers: "Pack light layers and a light jacket for the evenings.",
       light: "Pack light clothes, sunglasses and a light layer for the evening.",
       hot: "Pack breathable clothes, sunscreen, a hat and a refillable water bottle.",
-    } as Record<string, string>,
+    },
   },
 
   faq: {
@@ -675,7 +687,7 @@ const en = {
       if (p.week)
         items.push([
           `What's the weather forecast for ${p.name} this week?`,
-          `Highs range from ${r(p.week.hiMin)} to ${r(p.week.hiMax)} °C over the next ${p.week.days} days. The warmest looks to be ${p.week.warmestLabel} at ${T(p.week.warmestHi)}, and ${p.week.wetDays === 0 ? "no day is expected to be wet" : `${days(p.week.wetDays)} may bring rain or snow`}.`,
+          `Highs range from ${deg(p.week.hiMin)} to ${deg(p.week.hiMax)} °C over the next ${p.week.days} days. The warmest looks to be ${p.week.warmestLabel} at ${T(p.week.warmestHi)}, and ${p.week.wetDays === 0 ? "no day is expected to be wet" : `${days(p.week.wetDays)} may bring rain or snow`}.`,
         ]);
       if (p.sunrise && p.sunset)
         items.push([
@@ -795,6 +807,7 @@ const en = {
     otherMonths: "Other months",
     nearbyInMonth: (m: number) => `Nearby places in ${MONTHS[m]}`,
     daylightMid: "Daylight (mid-month)",
+    polar: { day: "Midnight sun", night: "Polar night" },
     recordHigh: "Record high",
     recordLow: "Record low",
     climateSource: (source: string, period: string) => `Climate normals for ${period} from ${source}.`,

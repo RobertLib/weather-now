@@ -50,7 +50,7 @@ export function rainWindow(hours: HourlyPoint[]): RainWindow {
   let total = 0;
   for (const h of hours) {
     total += h.precipitation;
-    if (h.pop > maxPop) {
+    if (h.pop !== null && h.pop > maxPop) {
       maxPop = h.pop;
       peakTime = h.time;
     }

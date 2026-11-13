@@ -11,21 +11,26 @@
 
 const LOCALES = ["en", "cs"];
 
+/** Letters that don't decompose into a base letter plus accent. */
 const SPECIAL_LETTERS = {
   ł: "l", Ł: "L", đ: "d", Đ: "D", ø: "o", Ø: "O", æ: "ae", Æ: "AE", œ: "oe",
   Œ: "OE", ß: "ss", þ: "th", Þ: "TH", ð: "d", Ð: "D", ı: "i", ħ: "h", Ħ: "H",
+  ə: "e", Ə: "E", ŧ: "t", Ŧ: "T", ŋ: "n", Ŋ: "N",
 };
 
 /**
  * Lowercase with accents stripped. NFKD (not NFD) also splits compatibility
- * characters such as ligatures and digraphs (ﬁ → fi, ǆ → dž → dz).
+ * characters such as ligatures and digraphs (ﬁ → fi, ǆ → dž → dz). It runs
+ * first, so letters that decompose into a special letter work too (ǿ → ø → o).
+ * Apostrophes and the ʻokina join the letters around them (Oʻahu → oahu).
  * `src/lib/places-client.ts` mirrors this for search; a test keeps them in sync.
  */
 export function fold(value) {
   return value
-    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦ]/g, (ch) => SPECIAL_LETTERS[ch])
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦəƏŧŦŋŊ]/g, (ch) => SPECIAL_LETTERS[ch])
+    .replace(/['‘’ʼʻ]/g, "")
     .toLowerCase();
 }
 
@@ -136,6 +141,12 @@ export function assignPlaceSlugs(places, previous) {
  * that matched), so none of its URLs change. Returns id → slugs for the current
  * places, `previous` plus the adoptions.
  *
+ * The result doesn't depend on the order of `places` or `previous`: vanished ids
+ * left with a single possible new place adopt it, which may settle others in
+ * turn ("portland-maine" takes Portland, Maine, leaving Portland, Oregon as the
+ * only match for "portland"). Several vanished ids left with the same single new
+ * place go to the one whose slug names the place's region, else to none.
+ *
  * @param {Array<{ id: number, cc: string, en: string, cs: string, a1?: { en: string, cs?: string } }>} places
  * @param {Map<number, { en: string, cs: string, cc?: string }>} previous
  * @param {string[]} notes
@@ -143,23 +154,59 @@ export function assignPlaceSlugs(places, previous) {
 function adoptReissuedIds(places, previous, notes) {
   const published = new Map(previous);
   const current = new Set(places.map((p) => p.id));
-  const newcomers = places.filter((p) => !previous.has(p.id));
+  const newcomers = new Map(places.filter((p) => !previous.has(p.id)).map((p) => [p.id, p]));
   // Slugs a place could have been published under: plain or region-suffixed.
-  const forms = (place) => {
-    const natural = naturalSlug(place, "en");
-    const regions = [place.a1?.en, place.a1?.cs].map((r) => slugify(r ?? "")).filter(Boolean);
-    return [natural, ...regions.map((r) => `${natural}-${r}`)];
-  };
+  const forms = new Map(
+    [...newcomers.values()].map((place) => {
+      const natural = naturalSlug(place, "en");
+      const regions = [place.a1?.en, place.a1?.cs].map((r) => slugify(r ?? "")).filter(Boolean);
+      return [place.id, { natural, suffixed: regions.map((r) => `${natural}-${r}`) }];
+    })
+  );
 
+  // Vanished id → (new place id → whether the slug names its region too).
+  const open = new Map();
   for (const [id, slugs] of previous) {
     if (current.has(id) || !slugs.cc) continue;
-    const matches = newcomers.filter((p) => p.cc === slugs.cc && !published.has(p.id) && forms(p).includes(slugs.en));
-    if (matches.length === 1) {
-      const [place] = matches;
-      published.set(place.id, slugs);
-      notes.push(`place #${id} (${slugs.en}) is now #${place.id} "${place.en}" — kept its URLs, check it is the same place`);
-    } else if (matches.length > 1) {
-      notes.push(`place #${id} (${slugs.en}) may be one of ${matches.map((p) => `#${p.id}`).join(", ")} — ambiguous, not carried over`);
+    const candidates = new Map();
+    for (const place of newcomers.values()) {
+      if (place.cc !== slugs.cc) continue;
+      const { natural, suffixed } = forms.get(place.id);
+      if (suffixed.includes(slugs.en)) candidates.set(place.id, true);
+      else if (natural === slugs.en) candidates.set(place.id, false);
+    }
+    if (candidates.size) open.set(id, candidates);
+  }
+
+  const claimed = new Set(); // new places that adopted an id or were contested
+  const left = (id) => [...open.get(id).keys()].filter((n) => !claimed.has(n));
+  for (;;) {
+    // New place → the vanished ids for which it is the only candidate left.
+    const forced = new Map();
+    for (const id of open.keys()) {
+      const rest = left(id);
+      if (rest.length === 1) forced.set(rest[0], [...(forced.get(rest[0]) ?? []), id]);
+    }
+    if (!forced.size) break;
+    for (const [n, ids] of forced) {
+      const specific = ids.filter((id) => open.get(id).get(n));
+      const winner = ids.length === 1 ? ids[0] : specific.length === 1 ? specific[0] : null;
+      const place = newcomers.get(n);
+      claimed.add(n);
+      if (winner === null) {
+        notes.push(`places ${ids.map((id) => `#${id} (${previous.get(id).en})`).join(", ")} may all be #${n} "${place.en}" — ambiguous, not carried over`);
+      } else {
+        const slugs = previous.get(winner);
+        published.set(n, slugs);
+        notes.push(`place #${winner} (${slugs.en}) is now #${n} "${place.en}" — kept its URLs, check it is the same place`);
+      }
+      for (const id of ids) open.delete(id);
+    }
+  }
+  for (const id of open.keys()) {
+    const rest = left(id);
+    if (rest.length > 1) {
+      notes.push(`place #${id} (${previous.get(id).en}) may be one of ${rest.map((n) => `#${n}`).join(", ")} — ambiguous, not carried over`);
     }
   }
   return published;

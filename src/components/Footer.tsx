@@ -3,7 +3,8 @@ import { Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { getCountry, popularPlaces, topCountries } from "@/lib/places";
 import { CLIMATE_PROVIDERS } from "@/lib/climate";
-import { countryPath, homePath, pagePath, placePath, worldPath } from "@/lib/routes";
+import { countryPath, pagePath, placePath, worldPath } from "@/lib/routes";
+import LanguageLink from "./LanguageLink";
 
 /** GitHub mark — lucide-react dropped brand icons in v1, so it lives inline. */
 function GithubMark({ className }: { className?: string }) {
@@ -106,9 +107,9 @@ export default function Footer({ locale }: { locale: Locale }) {
                 </Link>
               </li>
               <li>
-                <a href={homePath(locale === "en" ? "cs" : "en")} hrefLang={locale === "en" ? "cs" : "en"} className={linkClass}>
+                <LanguageLink to={locale === "en" ? "cs" : "en"} className={linkClass}>
                   {t.nav.switchTo}
-                </a>
+                </LanguageLink>
               </li>
             </ul>
           </div>

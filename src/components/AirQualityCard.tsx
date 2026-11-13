@@ -10,6 +10,7 @@ import {
   pollenLevel,
   pollutantReadings,
 } from "@/lib/air";
+import { badgeStyle } from "@/lib/contrast";
 import { useI18n } from "@/i18n/client";
 import { BarGauge } from "./Gauges";
 import Card from "./Card";
@@ -41,13 +42,14 @@ export default function AirQualityCard({ air, delay = 0 }: AirQualityCardProps) 
     >
       <div className="flex items-center gap-4">
         <div
-          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-2xl font-bold text-white shadow-lg"
-          style={{ backgroundColor: color }}
+          className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-2xl font-bold shadow-lg"
+          style={badgeStyle(color)}
         >
           {Math.round(index)}
         </div>
         <div className="min-w-0">
-          <p className="font-display text-lg font-bold" style={{ color }}>
+          {/* Plain text colour: the level colours (green, yellow) are unreadable as text on glass. */}
+          <p className="font-display text-lg font-bold">
             {t.air.levels[level]}
           </p>
           <p className="text-xs leading-snug text-slate-600 dark:text-slate-300">
@@ -104,8 +106,8 @@ export default function AirQualityCard({ air, delay = 0 }: AirQualityCardProps) 
             {pollen.map((p) => (
               <li
                 key={p.type}
-                className="rounded-full px-2.5 py-1 text-[0.7rem] font-semibold text-white"
-                style={{ backgroundColor: POLLEN_COLORS[p.level] }}
+                className="rounded-full px-2.5 py-1 text-[0.7rem] font-semibold"
+                style={badgeStyle(POLLEN_COLORS[p.level])}
               >
                 {t.air.pollenTypes[p.type]}: {t.air.pollenLevels[p.level].toLowerCase()}
               </li>

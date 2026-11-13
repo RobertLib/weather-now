@@ -7,6 +7,7 @@ import type {
   RangeProse,
   SunLine,
 } from "./en";
+import { signed } from "@/lib/units";
 
 /**
  * Czech dictionary. Place names come from GeoNames in the nominative, so the
@@ -15,7 +16,9 @@ import type {
 
 const r = (n: number) => Math.round(n);
 const dec = (n: number) => n.toLocaleString("cs-CZ", { maximumFractionDigits: 1 });
-const T = (c: number) => `${r(c)} °C`;
+/** A rounded temperature with a real minus sign. */
+const deg = (c: number) => signed(Math.round(c));
+const T = (c: number) => `${deg(c)} °C`;
 const pct = (p: number) => `${r(p * 100)} %`;
 const mm = (v: number) => `${v < 10 ? dec(Math.round(v * 10) / 10) : r(v)} mm`;
 const kmh = (ms: number) => `${r(ms * 3.6)} km/h`;
@@ -27,16 +30,30 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 const days = (n: number) => `${n} ${plural(n, "den", "dny", "dní")}`;
+
 /**
- * Locative "in n days": `v 1 dni`, `ve 3 dnech`, `v 5 dnech`. The preposition
- * follows how the number is read: ve dvou, třech, čtyřech, dvanácti, třinácti,
- * čtrnácti, dvaceti… (forecasts never need more than 16 days).
+ * Whether the preposition "v" becomes "ve" before a number. It follows how the
+ * number is read: ve dvou, třech, čtyřech, dvanácti, třinácti, čtrnácti,
+ * dvaceti… čtyřiceti devíti, ve stu, ve dvou stech; but v jedné, v pěti,
+ * v šedesáti, v tisíci. Times work the same way: ve 2:30, ve 21:15, v 7:12.
  */
-const inDays = (n: number) =>
-  `${[2, 3, 4, 12, 13, 14].includes(n) || (n >= 20 && n < 50) ? "ve" : "v"} ${n} ${n === 1 ? "dni" : "dnech"}`;
+export function vocalizesV(n: number): boolean {
+  const whole = Math.floor(Math.abs(n));
+  if (whole >= 1_000_000) return whole < 2_000_000 ? false : vocalizesV(Math.floor(whole / 1_000_000));
+  if (whole >= 1000) return whole < 2000 ? false : vocalizesV(Math.floor(whole / 1000));
+  if (whole >= 100) return whole < 500;
+  return [2, 3, 4, 12, 13, 14].includes(whole) || (whole >= 20 && whole < 50);
+}
+
+/** `v 5`, `ve 117`, `ve 21:15`, `v 7:12` — "in/at" before a number or a clock time. */
+const v = (value: number | string) =>
+  `${vocalizesV(typeof value === "number" ? value : parseInt(value, 10)) ? "ve" : "v"} ${value}`;
+
+/** Locative "in n days": `v 1 dni`, `ve 3 dnech`, `v 5 dnech`. */
+const inDays = (n: number) => `${v(n)} ${n === 1 ? "dni" : "dnech"}`;
 const sunSentence = (sun: SunLine) =>
   "rise" in sun
-    ? `Slunce vychází v ${sun.rise} a zapadá v ${sun.set}.`
+    ? `Slunce vychází ${v(sun.rise)} a zapadá ${v(sun.set)}.`
     : sun.polar === "day"
       ? "Slunce nezapadá (polární den)."
       : "Slunce nevychází (polární noc).";
@@ -81,6 +98,8 @@ const cs: Dictionary = {
     description:
       "Přesná hodinová a 14denní předpověď počasí, kvalita ovzduší, východ a západ slunce a klimatické průměry pro města po celém světě. Rychle, zdarma a bez reklam.",
     ogAlt: "WeatherNow — aktuální počasí a předpověď",
+    appName: "WeatherNow — předpověď počasí",
+    appDescription: "Hodinová a 14denní předpověď počasí, kvalita ovzduší a klimatické průměry pro města po celém světě.",
   },
 
   nav: {
@@ -434,7 +453,7 @@ const cs: Dictionary = {
     description: (n: number) =>
       `Předpověď počasí pro ${n} měst v zemích celého světa: hodinová a 14denní předpověď, kvalita ovzduší a podnebí.`,
     h1: "Počasí ve světě",
-    lead: (n: number, c: number) => `Předpovědi pro ${n} měst ve ${c} zemích. Vyberte zemi a zobrazte všechna její města.`,
+    lead: (n: number, c: number) => `Předpovědi pro ${n} měst ${v(c)} zemích. Vyberte zemi a zobrazte všechna její města.`,
     cities: (n: number) => `${n} ${plural(n, "město", "města", "měst")}`,
   },
 
@@ -488,7 +507,7 @@ const cs: Dictionary = {
       climate: (n: string, p: ClimateProse) =>
         `Podnebí ${n}: průměrné teploty, srážky a slunce po měsících. Nejtepleji ${IN_MONTH[p.warmest]}, nejlepší doba pro návštěvu: ${list(p.best.map((m) => MONTHS[m]))}.`,
       month: (n: string, m: number, hi: number, lo: number, p: number) =>
-        `Jaké je počasí ${n} ${IN_MONTH[m]}? Průměrné maximum ${r(hi)} °C, minimum ${r(lo)} °C, srážky ${mm(p)}. A co si sbalit.`,
+        `Jaké je počasí ${n} ${IN_MONTH[m]}? Průměrné maximum ${deg(hi)} °C, minimum ${deg(lo)} °C, srážky ${mm(p)}. A co si sbalit.`,
     },
     h1: {
       overview: (n: string) => `Počasí ${n}`,
@@ -525,7 +544,7 @@ const cs: Dictionary = {
         parts.push(`Zítra: ${p.tomorrow.cond.toLowerCase()}, ${T(p.tomorrow.hi)} / ${T(p.tomorrow.lo)}.`);
       if (p.week)
         parts.push(
-          `Během příštích ${p.week.days} dní se maxima pohybují mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C; ${p.week.wetDays === 0 ? "srážky se nečekají" : `srážky se čekají ${inDays(p.week.wetDays)}`}. Nejtepleji: ${p.week.warmestLabel.replace(/\.$/, "")}.`
+          `Během příštích ${p.week.days} dní se maxima pohybují mezi ${deg(p.week.hiMin)} a ${deg(p.week.hiMax)} °C; ${p.week.wetDays === 0 ? "srážky se nečekají" : `srážky se čekají ${inDays(p.week.wetDays)}`}. Nejtepleji: ${p.week.warmestLabel.replace(/\.$/, "")}.`
         );
       return parts.join(" ");
     },
@@ -554,7 +573,7 @@ const cs: Dictionary = {
     air: (n: string, aqi: number, level: string, advice: string, us: number | null) =>
       `${n}: kvalita ovzduší je teď ${level.toLowerCase()}, evropský index ${r(aqi)}${us !== null ? ` (americký AQI ${r(us)})` : ""}. ${advice}`,
     sun: (n: string, sunrise: string, sunset: string, daylight: string, change: number | null) =>
-      `${n} dnes: slunce vychází v ${sunrise} a zapadá v ${sunset}, den trvá ${daylight}.` +
+      `${n} dnes: slunce vychází ${v(sunrise)} a zapadá ${v(sunset)}, den trvá ${daylight}.` +
       (change === null || Math.abs(change) < 1
         ? ""
         : change > 0
@@ -571,12 +590,16 @@ const cs: Dictionary = {
         : "Průměrná minima zůstávají celý rok nad nulou. ") +
       `Nejpříjemnější počasí pro návštěvu: ${list(p.best.map((m) => MONTHS[m]))}.`,
     month: (p: MonthProse) =>
-      `${p.name} ${IN_MONTH[p.month]}: průměrná denní maxima ${T(p.hi)}, noční minima ${T(p.lo)}` +
+      (`${p.name} ${IN_MONTH[p.month]}: průměrná denní maxima ${T(p.hi)}, noční minima ${T(p.lo)}` +
       `${Math.abs(p.hi - p.prevHi) >= 1 ? ` — o ${r(Math.abs(p.hi - p.prevHi))} °C ${p.hi > p.prevHi ? "tepleji" : "chladněji"} než ${IN_MONTH[p.prevMonth]}` : ""}. ` +
       `Spadne asi ${mm(p.p)} srážek${p.pd === undefined ? "" : p.pd < 0.5 ? ", deštivé dny jsou vzácné" : `; dní se srážkami alespoň 1 mm bývá zhruba ${r(p.pd)}`}` +
       `${p.sd !== undefined && p.sd >= 0.5 ? `; sněží asi ${days(r(p.sd))}` : ""}. ` +
-      `${p.sun !== undefined ? `Slunce svítí přibližně ${r(p.sun)} ${plural(r(p.sun), "hodinu", "hodiny", "hodin")} denně a den` : "Den"} trvá v polovině měsíce ${p.daylight}. ` +
-      `${p.rhi !== undefined && p.rlo !== undefined ? `Extrémy posledních desetiletí: od ${T(p.rlo)} do ${T(p.rhi)}.` : ""}`,
+      (p.polar === "night"
+        ? "V polovině měsíce slunce vůbec nevychází (polární noc). "
+        : p.polar === "day"
+          ? "V polovině měsíce slunce vůbec nezapadá (polární den). "
+          : `${p.sun !== undefined ? `Slunce svítí přibližně ${r(p.sun)} ${plural(r(p.sun), "hodinu", "hodiny", "hodin")} denně a den` : "Den"} trvá v polovině měsíce ${p.daylight}. `) +
+      `${p.rhi !== undefined && p.rlo !== undefined ? `Extrémy posledních desetiletí: od ${T(p.rlo)} do ${T(p.rhi)}.` : ""}`).trim(),
     verdicts: {
       great: (n: string, m: number) => `${cap(MONTHS[m])} patří k nejlepším měsícům pro návštěvu (${n}) — příjemné počasí na procházky i výlety.`,
       good: (n: string, m: number) => `${cap(MONTHS[m])} je dobrá doba pro návštěvu (${n}); počasí je většinou příjemné.`,
@@ -599,7 +622,7 @@ const cs: Dictionary = {
       const items: Array<[string, string]> = [
         [
           `${p.name}: jaké je teď počasí?`,
-          `V ${p.time} místního času je ${T(p.temp)}, ${p.cond.toLowerCase()}, pocitově ${T(p.feels)}.`,
+          `${cap(v(p.time))} místního času je ${T(p.temp)}, ${p.cond.toLowerCase()}, pocitově ${T(p.feels)}.`,
         ],
       ];
       if (p.today)
@@ -619,12 +642,12 @@ const cs: Dictionary = {
       if (p.week)
         items.push([
           `${p.name}: jaká je předpověď na tento týden?`,
-          `Maxima během příštích ${p.week.days} dní mezi ${r(p.week.hiMin)} a ${r(p.week.hiMax)} °C. Nejtepleji: ${p.week.warmestLabel} (${T(p.week.warmestHi)}); ${p.week.wetDays === 0 ? "žádný den by neměl být deštivý" : `srážky mohou přijít ${inDays(p.week.wetDays)}`}.`,
+          `Maxima během příštích ${p.week.days} dní mezi ${deg(p.week.hiMin)} a ${deg(p.week.hiMax)} °C. Nejtepleji: ${p.week.warmestLabel} (${T(p.week.warmestHi)}); ${p.week.wetDays === 0 ? "žádný den by neměl být deštivý" : `srážky mohou přijít ${inDays(p.week.wetDays)}`}.`,
         ]);
       if (p.sunrise && p.sunset)
         items.push([
           `${p.name}: kdy dnes vychází a zapadá slunce?`,
-          `Slunce vychází v ${p.sunrise} a zapadá v ${p.sunset} místního času.`,
+          `Slunce vychází ${v(p.sunrise)} a zapadá ${v(p.sunset)} místního času.`,
         ]);
       else if (p.polar)
         items.push([
@@ -735,6 +758,7 @@ const cs: Dictionary = {
     otherMonths: "Další měsíce",
     nearbyInMonth: (m: number) => `Okolní místa ${IN_MONTH[m]}`,
     daylightMid: "Délka dne (polovina měsíce)",
+    polar: { day: "Polární den", night: "Polární noc" },
     recordHigh: "Rekordní maximum",
     recordLow: "Rekordní minimum",
     climateSource: (source: string, period: string) => `Klimatické normály za období ${period}, zdroj: ${source}.`,

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { THEME_STORAGE_KEY, ThemePreference } from "@/lib/theme";
 import { useLocalStorage } from "./useLocalStorage";
 
-export type ThemePreference = "light" | "dark" | "system";
-
-const STORAGE_KEY = "weathernow:theme";
+export type { ThemePreference };
 
 function apply(preference: ThemePreference) {
   const dark =
@@ -17,10 +16,10 @@ function apply(preference: ThemePreference) {
 
 export function useTheme() {
   const [preference, setPreference, hydrated] =
-    useLocalStorage<ThemePreference>(STORAGE_KEY, "system");
+    useLocalStorage<ThemePreference>(THEME_STORAGE_KEY, "system");
 
   useEffect(() => {
-    // Before hydration the inline bootstrap script has already set the class.
+    // Before hydration the inline bootstrap script (lib/theme.ts) has already set the class.
     if (!hydrated) return;
     apply(preference);
 
@@ -33,11 +32,3 @@ export function useTheme() {
 
   return { preference, setPreference };
 }
-
-/**
- * Inlined in <head> so the `dark` class exists before first paint and the
- * page never flashes the wrong theme.
- */
-export const themeBootstrapScript = `(function(){try{var p=JSON.parse(localStorage.getItem(${JSON.stringify(
-  STORAGE_KEY
-)})||'"system"');var d=p==="dark"||(p!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;

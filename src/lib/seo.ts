@@ -75,5 +75,7 @@ export function rootMetadata(locale: Locale): Metadata {
     creator: "Robert Libsansky",
     category: "weather",
     formatDetection: { telephone: false, address: false },
+    // Each language installs as its own app (see lib/manifest.ts).
+    manifest: locale === "en" ? "/manifest.webmanifest" : "/cs/manifest.webmanifest",
   };
 }

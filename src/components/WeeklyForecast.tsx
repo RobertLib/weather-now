@@ -8,7 +8,6 @@ import {
   UnitSystem,
   compassIndex,
   convertSpeed,
-  convertTemp,
   formatTemp,
   speedUnit,
 } from "@/lib/units";
@@ -169,10 +168,10 @@ export default function WeeklyForecast({ days, hourly, tz, units, theme }: Weekl
                           animated={false}
                         />
                         <span className="tabular text-sm font-bold text-slate-800 dark:text-slate-100">
-                          {Math.round(convertTemp(item.temp, units))}°
+                          {formatTemp(item.temp, units)}
                         </span>
                         <span className="tabular text-[0.62rem] text-sky-600 dark:text-sky-300">
-                          {Math.round(item.pop * 100)}%
+                          {item.pop === null ? "—" : `${Math.round(item.pop * 100)}%`}
                         </span>
                       </div>
                     ))}

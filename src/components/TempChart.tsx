@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { HourlyPoint } from "@/types/weather";
 import { SkyTheme } from "@/lib/conditions";
-import { UnitSystem, convertTemp, formatTemp } from "@/lib/units";
+import { UnitSystem, convertTemp, formatTemp, signed } from "@/lib/units";
 import { dayKey, formatHour, formatWeekday } from "@/lib/datetime";
 import { useI18n } from "@/i18n/client";
 
@@ -108,6 +108,8 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
 
           {/* Precipitation chance */}
           {points.map((p, i) => {
+            // No bar where the model gives no probability (unknown, not 0 %).
+            if (p.pop === null) return null;
             const h = p.pop * 34;
             return (
               <rect
@@ -169,7 +171,7 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
                 className="fill-slate-800 text-[12.5px] font-bold dark:fill-slate-100"
                 style={{ fontVariantNumeric: "tabular-nums" }}
               >
-                {Math.round(temps[i])}°
+                {signed(Math.round(temps[i]))}°
               </text>
               <text
                 x={x(i)}
@@ -179,7 +181,7 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
               >
                 {formatHour(p.time, tz, locale)}
               </text>
-              {p.pop >= 0.15 && (
+              {p.pop !== null && p.pop >= 0.15 && (
                 <text
                   x={x(i)}
                   y={H - 10}
@@ -234,8 +236,8 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
                   className="fill-white text-[11px] font-semibold dark:fill-slate-900"
                 >
                   {formatHour(points[active].time, tz, locale)} ·{" "}
-                  {Math.round(temps[active])}° · {t.chart.feels}{" "}
-                  {Math.round(feels[active])}°
+                  {signed(Math.round(temps[active]))}° · {t.chart.feels}{" "}
+                  {signed(Math.round(feels[active]))}°
                 </text>
               </g>
             </g>
@@ -246,14 +248,14 @@ export default function TempChart({ items, tz, units, theme, step: every = 2 }: 
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[0.7rem] text-slate-500 dark:text-slate-400">
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="h-[3px] w-5 rounded-full"
+            className="h-0.75 w-5 rounded-full"
             style={{ backgroundColor: theme.accent }}
           />
           {t.chart.temperature}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="h-[3px] w-5 rounded-full opacity-60"
+            className="h-0.75 w-5 rounded-full opacity-60"
             style={{
               backgroundImage: `repeating-linear-gradient(90deg, ${theme.accent} 0 4px, transparent 4px 8px)`,
             }}

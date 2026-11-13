@@ -58,10 +58,10 @@ export default function HourlyForecast({ items, tz, units, theme, now }: HourlyF
 
             <span
               className="tabular mt-1 inline-flex items-center gap-1 text-[0.68rem] font-medium"
-              style={{ color: item.pop >= 0.3 ? theme.accent : undefined }}
+              style={{ color: item.pop !== null && item.pop >= 0.3 ? theme.accent : undefined }}
             >
               <Droplets className="h-3 w-3" aria-hidden="true" />
-              {Math.round(item.pop * 100)}%
+              {item.pop === null ? "—" : `${Math.round(item.pop * 100)}%`}
             </span>
             <span className="tabular mt-0.5 inline-flex items-center gap-1 text-[0.68rem] text-slate-500 dark:text-slate-400">
               <Wind className="h-3 w-3" aria-hidden="true" />

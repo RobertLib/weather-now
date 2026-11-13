@@ -1,7 +1,7 @@
 "use client";
 
 import { useUnits } from "@/hooks/useUnits";
-import { convertSpeed, convertTemp, speedUnit, tempUnit } from "@/lib/units";
+import { convertSpeed, convertTemp, signed, speedUnit, tempUnit } from "@/lib/units";
 
 /**
  * Temperatures and speeds inside server-rendered pages. The HTML carries the
@@ -12,7 +12,7 @@ export function Temp({ c, unit = false }: { c: number; unit?: boolean }) {
   const [units] = useUnits();
   return (
     <>
-      {Math.round(convertTemp(c, units))}°{unit ? tempUnit(units).slice(1) : ""}
+      {signed(Math.round(convertTemp(c, units)))}°{unit ? tempUnit(units).slice(1) : ""}
     </>
   );
 }

@@ -31,9 +31,11 @@
  * elevation to the place elevation. POWER-only places where POWER looks
  * unrepresentative are reported. POWER is fetched for every place: it supplies
  * missing precipitation, is the reference for daily-derived normals and serves
- * as a cross-check.
+ * as a cross-check. A place without a complete POWER record therefore stops the
+ * run before anything is written.
  *
- * Output: `data` (12 × { hi, lo, p, pd?, sun?, rhi?, rlo? } per place id),
+ * Output: `updated` (YYYY-MM-DD; kept from the previous file while `data` is
+ * byte-identical), `data` (12 × { hi, lo, p, pd?, sun?, rhi?, rlo? } per place id),
  * `sources` (provider of the temperatures: "meteostat" | "power"),
  * `precipSources` (only for places whose precipitation comes from the other
  * provider) and `origins`, which identifies where the temperature normals come
@@ -50,7 +52,7 @@
  * git-ignored), so an interrupted run resumes and re-runs are offline.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -189,7 +191,17 @@ const lapseShift = (kind, i, lat, fromEle, toEle) => lapseRate(kind, i, lat) * (
 
 /* Record QC ---------------------------------------------------------------- */
 
-/** Daily series: a month-year counts for rain days and records when this share of its days has data. */
+/**
+ * Daily series: a month-year counts for precipitation, rain days and records when
+ * this share of its days has data. Precipitation totals and rain-day counts are
+ * then scaled up to the whole month, i.e. a missing day counts as a typical day
+ * of that month rather than a dry one. Measured over the cached stations
+ * (1991–2020, month-years 90–99% complete vs complete ones of the same station
+ * and month), missing days are as often wet (≥ 1 mm) as reported days but carry
+ * about 70% of their mean amount: scaled totals of such months run ~2% high,
+ * unscaled ones ~4% low. Only 13% of the usable month-years are incomplete, so
+ * the scaling moves a normal by about +0.2% and leaves rain days unbiased.
+ */
 const MONTH_COVERAGE = 0.9;
 /** …and a derived statistic needs this many such years in every month. */
 const MIN_YEARS_RAIN_DAYS = 10;
@@ -249,10 +261,26 @@ const inFlight = new Map();
 const RETRY_404 = process.env.DATA_RETRY_404 === "1";
 
 /**
+ * Writes `data` to a temporary file and renames it into place, so an
+ * interrupted run never leaves a truncated cache entry or dataset behind.
+ */
+async function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await writeFile(tmp, data);
+    await rename(tmp, file);
+  } catch (error) {
+    await rm(tmp, { force: true });
+    throw error;
+  }
+}
+
+/**
  * Download `url` into the cache (gzip-compressed unless already .gz) and return
  * the decompressed text, or null for 404. Throttled per host and retried.
  * `valid(text)`, when given, vets a 200 response before it is cached: one that
  * fails is returned for this run but not stored, so the next run asks again.
+ * A cache entry that doesn't decompress or pass `valid` counts as a miss.
  */
 function cachedText(url, relativeFile, valid) {
   const file = path.join(CACHE_DIR, relativeFile);
@@ -265,7 +293,16 @@ function cachedText(url, relativeFile, valid) {
 async function fetchCached(url, file, valid) {
   const missing = `${file}.404`;
   if (existsSync(missing) && !RETRY_404) return null;
-  if (existsSync(file)) return gunzipSync(await readFile(file)).toString("utf8");
+  if (existsSync(file)) {
+    try {
+      const text = gunzipSync(await readFile(file)).toString("utf8");
+      if (!valid || valid(text)) return text;
+      throw new Error("content fails validation");
+    } catch (error) {
+      console.warn(`  ! unreadable cache entry ${file} (${error.message}) – downloading again`);
+      await rm(file, { force: true });
+    }
+  }
 
   const host = new URL(url).host;
   for (let attempt = 1; ; attempt++) {
@@ -274,7 +311,7 @@ async function fetchCached(url, file, valid) {
       const res = await fetch(url, { signal: AbortSignal.timeout(180_000) });
       await mkdir(path.dirname(file), { recursive: true });
       if (res.status === 404) {
-        await writeFile(missing, "");
+        await writeAtomic(missing, "");
         return null;
       }
       if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`);
@@ -286,7 +323,7 @@ async function fetchCached(url, file, valid) {
         console.warn(`  ! ${url}: unexpected response – used for this run only, not cached`);
         return text;
       }
-      await writeFile(file, gz);
+      await writeAtomic(file, gz);
       if (existsSync(missing)) await rm(missing);
       return text;
     } catch (error) {
@@ -346,9 +383,18 @@ const maxMeanDelta = (a, b) => Math.max(...a.map((m, i) => Math.abs((m.hi + m.lo
 /* Meteostat                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Stations with published 1991–2020 normals or a daily series that can cover MIN_YEARS_NORMAL of the period. */
+function isJsonArray(text) {
+  try {
+    return Array.isArray(JSON.parse(text));
+  } catch {
+    return false;
+  }
+}
+
+/** Stations with published 1991–2020 normals or a daily series that can cover `minYears` of the period. */
 async function loadStations(minYears) {
-  const text = await cachedText(`${METEOSTAT}/stations/lite.json.gz`, "meteostat/stations-lite.json.gz");
+  const text = await cachedText(`${METEOSTAT}/stations/lite.json.gz`, "meteostat/stations-lite.json.gz", isJsonArray);
+  if (!text) throw new Error("Meteostat station list not found (404)");
   return JSON.parse(text)
     .filter((s) => {
       if (
@@ -517,8 +563,9 @@ async function loadDaily(station) {
  * Normals computed from the daily series, per variable: a 12-month array or null.
  * A month-year counts when at most MAX_MISSING_DAYS of its days lack the value
  * (temperatures: tmin and tmax both present). Precipitation needs MONTH_COVERAGE,
- * since missing days are often dry ones, and its totals are scaled up to the full
- * month. A monthly normal is the mean over at least MIN_YEARS_NORMAL such years.
+ * and its totals are scaled up to the full month (see MONTH_COVERAGE for why that
+ * beats counting missing days as dry). A monthly normal is the mean over at least
+ * MIN_YEARS_NORMAL such years.
  * With a POWER reference (`ref`: per month, per year { hi, lo }), the
  * temperature mean is adjusted for the years that are missing:
  *   normal = mean(station, years present)
@@ -772,17 +819,26 @@ function powerCell(lat, lon) {
   return `${fmt(cLat)},${fmt(cLon)}`;
 }
 
-/** Whether a POWER response carries every requested parameter (worth caching). */
-function isCompletePowerResponse(text) {
+/** What a POWER response lacks, or null when it is complete (and worth caching). */
+function powerResponseProblem(text) {
+  let json;
   try {
-    const parameter = JSON.parse(text).properties?.parameter;
-    return POWER_PARAMETERS.every((p) => parameter?.[p] && Object.keys(parameter[p]).length > 0);
+    json = JSON.parse(text);
   } catch {
-    return false;
+    return "response is not JSON";
   }
+  const parameter = json.properties?.parameter;
+  const absent = POWER_PARAMETERS.filter((p) => !parameter?.[p] || Object.keys(parameter[p]).length === 0);
+  if (absent.length) return `response lacks ${absent.join(", ")}`;
+  if (!Number.isFinite(json.geometry?.coordinates?.[2])) return "response lacks the grid-cell elevation";
+  return null;
 }
 
-/** Monthly means from POWER daily data, lapse-rate corrected to the place elevation. */
+/**
+ * Monthly means from POWER daily data, lapse-rate corrected to the place
+ * elevation: { months, byYear, gridEle, cell }, or { problem } when POWER has
+ * no complete record for the place.
+ */
 async function powerClimate(place) {
   const lat = place.lat.toFixed(4);
   const lon = place.lon.toFixed(4);
@@ -791,13 +847,15 @@ async function powerClimate(place) {
     `&longitude=${lon}&latitude=${lat}&start=${PERIOD_START}0101&end=${PERIOD_END}1231&format=JSON`;
   // The cache key spells out everything that shapes the response.
   const file = `power/${POWER_COMMUNITY}_${POWER_PARAMETERS.join("-")}_${PERIOD_START}-${PERIOD_END}/${lat}_${lon}.json.gz`;
-  const text = await cachedText(url, file, isCompletePowerResponse);
-  if (!text) return null;
+  // Incomplete responses are never cached, so a re-run asks again.
+  const text = await cachedText(url, file, (body) => !powerResponseProblem(body));
+  if (text === null) return { problem: "HTTP 404, cached as such (DATA_RETRY_404=1 asks again)" };
+  const problem = powerResponseProblem(text);
+  if (problem) return { problem: `${problem} (not cached)` };
   const json = JSON.parse(text);
-  const parameter = json.properties?.parameter;
+  const parameter = json.properties.parameter;
   const fill = json.header?.fill_value ?? -999;
-  const gridEle = json.geometry?.coordinates?.[2];
-  if (!POWER_PARAMETERS.every((p) => parameter?.[p]) || !Number.isFinite(gridEle)) return null;
+  const gridEle = json.geometry.coordinates[2];
 
   // [sum, count] per month (all years) and per month-year (for byYear).
   const slots = () => ({ hi: [0, 0], lo: [0, 0], p: [0, 0] });
@@ -819,7 +877,8 @@ async function powerClimate(place) {
     }
   }
   // Require 25 of 30 years of days in every month.
-  if (sums.some((s, i) => Math.min(s.hi[1], s.lo[1], s.p[1]) < 25 * MEAN_DAYS[i])) return null;
+  const short = sums.findIndex((s, i) => Math.min(s.hi[1], s.lo[1], s.p[1]) < 25 * MEAN_DAYS[i]);
+  if (short !== -1) return { problem: `fewer than 25 years of valid days in month ${short + 1}` };
   const months = sums.map((s, i) => ({
     hi: s.hi[0] / s.hi[1] + lapseShift("hi", i, place.lat, gridEle, place.ele),
     lo: s.lo[0] / s.lo[1] + lapseShift("lo", i, place.lat, gridEle, place.ele),
@@ -1021,6 +1080,28 @@ async function placeClimate(place, { stations, shortRecordStations, lastResortSt
 /* Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/** Today's date (local time) as YYYY-MM-DD. */
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * The previous climate.json's `updated` date when its `data` section (the last
+ * one in the file) is byte-identical to `dataSection`, else null.
+ */
+async function unchangedSince(dataSection) {
+  if (!existsSync(OUT_FILE)) return null;
+  const previous = await readFile(OUT_FILE, "utf8");
+  if (!previous.endsWith(`\n${dataSection}\n}\n`)) return null;
+  try {
+    const { updated } = JSON.parse(previous);
+    return /^\d{4}-\d{2}-\d{2}$/.test(updated ?? "") ? updated : null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   console.log(`cache: ${CACHE_DIR}`);
   const places = JSON.parse(await readFile(PLACES_FILE, "utf8"));
@@ -1036,11 +1117,22 @@ async function main() {
 
   // POWER first, a few downloads at a time (the slow part of a cold run).
   const powerById = new Map();
+  const powerProblems = [];
   let done = 0;
   await forEachConcurrent(places, POWER_CONCURRENCY, async (place) => {
-    powerById.set(place.id, await powerClimate(place));
+    const power = await powerClimate(place);
+    if (power.problem) powerProblems.push(`${place.en} (${place.cc}, #${place.id}): ${power.problem}`);
+    else powerById.set(place.id, power);
     if (++done % 50 === 0 || done === places.length) console.log(`POWER ${done}/${places.length}`);
   });
+  // Without POWER a place would quietly lose the anomaly adjustment, the second
+  // station pass and the precipitation checks, or its climate altogether.
+  if (powerProblems.length) {
+    console.error(`\nNo usable NASA POWER record for ${powerProblems.length} place(s); ${path.relative(ROOT, OUT_FILE)} was not written:`);
+    for (const problem of powerProblems.sort()) console.error(`  ${problem}`);
+    console.error("Run the script again to retry the downloads (with DATA_RETRY_404=1 for cached 404s).");
+    process.exit(1);
+  }
 
   const data = {};
   const sources = {};
@@ -1098,6 +1190,12 @@ async function main() {
   }
 
   const ids = Object.keys(data).sort((a, b) => Number(a) - Number(b));
+  const block = (name, map, keys) => [
+    `  ${JSON.stringify(name)}: {`,
+    keys.map((id) => `    ${JSON.stringify(id)}: ${JSON.stringify(map[id])}`).join(",\n"),
+    "  }",
+  ];
+  const dataSection = block("data", data, ids).join("\n");
   const header = {
     source:
       "Meteostat station climate normals 1991–2020 (published normals, or computed from quality-checked Meteostat daily station data where those are incomplete; " +
@@ -1107,23 +1205,19 @@ async function main() {
     sourceUrl: "https://meteostat.net/",
     license: "Meteostat: CC BY-NC 4.0; NASA POWER: public domain (no restrictions)",
     period: `${PERIOD_START}–${PERIOD_END}`,
+    updated: (await unchangedSince(dataSection)) ?? today(),
   };
-  const block = (name, map, keys) => [
-    `  ${JSON.stringify(name)}: {`,
-    keys.map((id) => `    ${JSON.stringify(id)}: ${JSON.stringify(map[id])}`).join(",\n"),
-    "  }",
-  ];
   const lines = [
     "{",
     ...Object.entries(header).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`),
     ...block("sources", sources, ids).with(-1, "  },"),
     ...block("precipSources", precipSources, ids.filter((id) => precipSources[id])).with(-1, "  },"),
     ...block("origins", origins, ids).with(-1, "  },"),
-    ...block("data", data, ids),
+    dataSection,
     "}",
     "",
   ];
-  await writeFile(OUT_FILE, lines.join("\n"));
+  await writeAtomic(OUT_FILE, lines.join("\n"));
 
   console.log(`\nflags (station vs POWER, review):`);
   for (const f of flags) console.log(`  ? ${f}`);

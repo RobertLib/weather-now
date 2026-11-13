@@ -48,10 +48,8 @@ export default function ActivityCard({ scores, delay = 0 }: ActivityCardProps) {
                 }}
               />
             </span>
-            <span
-              className="w-16 shrink-0 text-right text-[0.68rem] font-semibold sm:w-20 sm:text-xs"
-              style={{ color: scoreColor(item.score) }}
-            >
+            {/* The bar carries the colour; the verdict stays readable on glass. */}
+            <span className="w-16 shrink-0 text-right text-[0.68rem] font-semibold text-slate-600 sm:w-20 sm:text-xs dark:text-slate-300">
               {t.activities.verdicts[item.level]}
             </span>
           </li>

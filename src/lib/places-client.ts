@@ -62,17 +62,20 @@ export function indexPlacePath(index: PlaceIndex, p: IndexPlace, locale: Locale)
 const SPECIAL_LETTERS: Record<string, string> = {
   ł: "l", Ł: "L", đ: "d", Đ: "D", ø: "o", Ø: "O", æ: "ae", Æ: "AE", œ: "oe",
   Œ: "OE", ß: "ss", þ: "th", Þ: "TH", ð: "d", Ð: "D", ı: "i", ħ: "h", Ħ: "H",
+  ə: "e", Ə: "E", ŧ: "t", Ŧ: "T", ŋ: "n", Ŋ: "N",
 };
 
 /**
- * Lowercase with accents stripped, so "wroclaw" finds Wrocław and "tromso"
- * Tromsø. Mirrors `fold` in scripts/lib/slugs.mjs (a test keeps them in sync).
+ * Lowercase with accents and apostrophes stripped, so "wroclaw" finds Wrocław,
+ * "tromso" Tromsø and "oahu" Oʻahu. Mirrors `fold` in scripts/lib/slugs.mjs
+ * (a test keeps them in sync).
  */
 export function normalize(value: string): string {
   return value
-    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦ]/g, (ch) => SPECIAL_LETTERS[ch])
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[łŁđĐøØæÆœŒßþÞðÐıħĦəƏŧŦŋŊ]/g, (ch) => SPECIAL_LETTERS[ch])
+    .replace(/['‘’ʼʻ]/g, "")
     .toLowerCase()
     .trim();
 }

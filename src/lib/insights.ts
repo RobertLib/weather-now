@@ -59,17 +59,19 @@ export function buildInsights(
     tone: feels <= 0 || feels >= 30 ? "warn" : "good",
   });
 
+  // Hours without a probability (only ever at the far end of the range) count as dry.
+  const pop = (h: HourlyPoint) => h.pop ?? 0;
   const wettest = next12.reduce<HourlyPoint | null>(
-    (best, item) => (!best || item.pop > best.pop ? item : best),
+    (best, item) => (!best || pop(item) > pop(best) ? item : best),
     null
   );
-  if (wettest && wettest.pop >= 0.3) {
+  if (wettest && pop(wettest) >= 0.3) {
     insights.push({
       id: "rain",
       icon: "umbrella",
       title: t.insights.umbrellaTitle,
-      text: t.insights.umbrellaText(wettest.pop, fmt.hour(wettest.time)),
-      tone: wettest.pop >= 0.6 ? "alert" : "warn",
+      text: t.insights.umbrellaText(pop(wettest), fmt.hour(wettest.time)),
+      tone: pop(wettest) >= 0.6 ? "alert" : "warn",
     });
   } else if (!isWet(current.code)) {
     insights.push({
@@ -119,7 +121,7 @@ export function buildInsights(
       id: "best-hour",
       icon: "clock",
       title: t.insights.bestTitle(fmt.hour(best.time)),
-      text: t.insights.bestText(fmt.temp(best.temp), best.pop),
+      text: t.insights.bestText(fmt.temp(best.temp), best.pop ?? 0),
       tone: "info",
     });
   }
@@ -168,7 +170,7 @@ function bestHour(hourly: HourlyPoint[], tz: string): HourlyPoint | null {
     if (hour < 7 || hour > 21) continue;
 
     const comfort = 22 - Math.abs(item.feelsLike - 21) * 1.4;
-    const dry = (1 - item.pop) * 8;
+    const dry = (1 - (item.pop ?? 0)) * 8;
     const calm = Math.max(0, 6 - item.windSpeed);
     const bright = (100 - item.clouds) / 25;
     const score = comfort + dry + calm + bright;
@@ -202,7 +204,7 @@ export function activityScores(
   const wind = current.windSpeed * 3.6;
   const clouds = current.clouds;
   const humidity = current.humidity;
-  const pop = Math.max(0, ...hourly.slice(0, 6).map((h) => h.pop));
+  const pop = Math.max(0, ...hourly.slice(0, 6).map((h) => h.pop ?? 0));
   const kind = conditionKind(current.code);
   const wet = kind === "rain" || kind === "drizzle" || kind === "thunder";
   const night = !current.isDay;

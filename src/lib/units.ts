@@ -8,9 +8,17 @@ export function tempUnit(units: UnitSystem): string {
   return units === "metric" ? "°C" : "°F";
 }
 
-/** Rounded temperature with a degree sign, e.g. `21°`. */
+/**
+ * A whole number with a real minus sign (U+2212) instead of a hyphen, which
+ * typesets better and is read as "minus" by screen readers. `-0` prints as `0`.
+ */
+export function signed(n: number): string {
+  return n < 0 ? `\u2212${-n}` : String(Math.abs(n));
+}
+
+/** Rounded temperature with a degree sign, e.g. `21°`, `−3°`. */
 export function formatTemp(celsius: number, units: UnitSystem): string {
-  return `${Math.round(convertTemp(celsius, units))}°`;
+  return `${signed(Math.round(convertTemp(celsius, units)))}°`;
 }
 
 /** A temperature *difference* (no 32° offset), e.g. a 10 °C swing is `18°` in °F. */

@@ -49,14 +49,20 @@ datasets (about 100 kB and 260 kB) must never end up in the browser bundle.
 **Languages.** English lives at the root and Czech under `/cs`, as two route
 groups with their own root layouts (`src/app/(en)`, `src/app/(cs)/cs`). Route
 files are thin wrappers around shared views in `src/views`. All UI text, the
-generated sentences and the FAQs live in `src/i18n/en.ts` and `src/i18n/cs.ts`.
+generated sentences and the FAQs live in `src/i18n/en.ts` and `src/i18n/cs.ts`;
+only the long-form about, privacy and terms pages are written out per language
+in `src/views/StaticPages.tsx`. Czech sentences never decline place names;
+`v`/`ve` before a number or clock time follows how it is read (`ve 21:15`,
+`v 7:12`, `ve 117 zemích`). Each language has its own web app manifest
+(`src/lib/manifest.ts`), so the app installed from `/cs` opens in Czech.
 
 **SEO.**
 - Every page has a canonical URL and hreflang alternates (`src/lib/seo.ts`).
 - Pages carry JSON-LD: WebSite, BreadcrumbList, WebPage + City, FAQPage, and
   Dataset on climate pages (`src/lib/schema.ts`).
 - A sitemap index at `/sitemap.xml` points to split sitemaps under
-  `/sitemaps/sitemap/{pages,en,cs}.xml`.
+  `/sitemaps/sitemap/{pages,en,cs}.xml`. Climate pages carry a `lastmod` taken
+  from `updated` in `climate.json`; forecast pages carry none.
 - Internal links: the footer links to popular cities and countries, and each
   city page links to the same view for its nearest cities.
 - Climate pages that would show exactly the numbers of a more populous place
@@ -68,8 +74,10 @@ generated sentences and the FAQs live in `src/i18n/en.ts` and `src/i18n/cs.ts`.
 - City meta descriptions quote no live numbers: search engines keep a snippet
   for days, long after a "current" temperature has changed.
 
-**Security headers** (`next.config.ts`): `nosniff`, a strict referrer policy,
-a permissions policy that only allows geolocation, and
+**Security headers** (`next.config.ts`): `nosniff`, an origin-only referrer
+policy (`strict-origin`, so a place in the homepage's query string never leaks
+into the next page's referrer), a permissions policy that only allows
+geolocation, and
 `frame-ancestors 'self'` everywhere except `/embed/…`, which third-party sites
 frame.
 
@@ -123,8 +131,14 @@ Regenerate the datasets with `npm run data`. A cold run takes about 20 minutes
 (mostly NASA POWER); downloads are cached in `$DATA_CACHE_DIR`, which defaults
 to `.cache/data` in the repo (git-ignored). Keep that cache: a re-run then works
 offline and GeoNames ids stay stable. A 404 is cached too (Meteostat has no
-file for many stations); `DATA_RETRY_404=1 npm run data` asks again. POWER
-responses missing a parameter are used for that run only and never cached.
+file for many stations); `DATA_RETRY_404=1 npm run data` asks again. Incomplete POWER
+responses are never cached. If any place ends up without a complete POWER
+record (an incomplete response, fewer than 25 years of data, or a cached 404),
+the script lists those places and exits with an error before writing
+`climate.json`; run it again (with `DATA_RETRY_404=1` for cached 404s). Cache
+files and the datasets are written atomically, and a cache file that can't be
+read is downloaded again. Unused hand fixes (`OVERRIDES`, `A1_FIXES` in
+`build-places.mjs`) are reported.
 
 URL slugs are published URLs, so `build-places.mjs` keeps every slug already in
 `places.json` / `countries.json` (by place id and country code), even when

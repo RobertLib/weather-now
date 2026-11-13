@@ -20,7 +20,7 @@
  * Regenerate them on macOS to keep the published look.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -411,11 +411,29 @@ function brandCardSvg(w, h) {
 const svgToPng = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).png({ compressionLevel: 9 }).toBuffer();
 
+/** Fails before anything is overwritten when ImageMagick is missing, so the icons never end up half-regenerated. */
+function assertMagick() {
+  try {
+    execFileSync("magick", ["-version"], { stdio: "ignore" });
+  } catch {
+    throw new Error("ImageMagick (`magick`) is required for favicon.ico; install it and run again. Nothing was written.");
+  }
+}
+
 async function main() {
+  assertMagick();
+  const tmp = mkdtempSync(join(tmpdir(), "weathernow-icons-"));
+  try {
+    await generate(tmp);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+async function generate(tmp) {
   const rounded = iconSvg({ radius: 112 });
   const maskable = iconSvg({ radius: 0, inset: 0.78 });
   const apple = iconSvg({ radius: 0, inset: 0.92 });
-  const tmp = mkdtempSync(join(tmpdir(), "weathernow-icons-"));
 
   // Scalable favicon, checked into the app directory.
   writeFileSync(out("src/app/icon.svg"), rounded + "\n");

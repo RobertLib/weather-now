@@ -173,7 +173,8 @@ export function normalizeForecast(raw: RawForecast, fetchedAt = Date.now()): For
     temp: num(h.temperature_2m[i]),
     feelsLike: num(h.apparent_temperature[i], num(h.temperature_2m[i])),
     humidity: num(h.relative_humidity_2m[i]),
-    pop: num(h.precipitation_probability[i]) / 100,
+    // Missing at the far end of the range (the last ~1.5 days): unknown, not 0 %.
+    pop: h.precipitation_probability[i] == null ? null : num(h.precipitation_probability[i]) / 100,
     precipitation: num(h.precipitation[i]),
     code: num(h.weather_code[i]),
     clouds: num(h.cloud_cover[i]),

@@ -48,7 +48,10 @@ describe("matchPlaces", () => {
   });
 
   it("folds exactly like the slug generator", () => {
-    for (const name of ["Wrocław", "Tromsø", "Straße", "Þingvellir", "České Budějovice", "ǅakovo"]) {
+    for (const name of [
+      "Wrocław", "Tromsø", "Straße", "Þingvellir", "České Budějovice", "ǅakovo",
+      "Ǿresund", "Ǽble", "ǣ", "Gəncə", "ƏŧŦŋŊ", "Oʻahu", "L’Aquila", "Côte d'Azur", "ʼ‘",
+    ]) {
       expect(normalize(name)).toBe(fold(name));
     }
   });

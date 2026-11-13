@@ -80,23 +80,37 @@ export default function WeatherDashboard({
   const [favorites, setFavorites] = useFavorites();
   const [, setLastPlace] = useLocalStorage<PlaceRef | null>(LAST_PLACE_KEY, null);
   const placeRef = useRef(place);
+  /** Bumped by every load, so a slow older response can't overwrite a newer one. */
+  const requestRef = useRef(0);
+  const loadingRef = useRef(false);
+  const fetchedAtRef = useRef(initialForecast?.fetchedAt ?? 0);
 
   const load = useCallback(async () => {
     const { lat, lon } = placeRef.current;
+    const request = ++requestRef.current;
+    const isLatest = () => request === requestRef.current;
+    loadingRef.current = true;
     setIsRefreshing(true);
     setError(null);
     try {
       const next = await fetchForecast(lat, lon);
+      if (!isLatest()) return;
+      fetchedAtRef.current = next.fetchedAt;
       setForecast(next);
       fetchAirQuality(lat, lon)
-        .then(setAir)
+        .then((nextAir) => {
+          if (isLatest()) setAir(nextAir);
+        })
         .catch(() => {
           /* air quality is a bonus panel */
         });
     } catch (err) {
-      setError(errorMessage(t, err));
+      if (isLatest()) setError(errorMessage(t, err));
     } finally {
-      setIsRefreshing(false);
+      if (isLatest()) {
+        loadingRef.current = false;
+        setIsRefreshing(false);
+      }
     }
   }, [t]);
 
@@ -121,6 +135,33 @@ export default function WeatherDashboard({
       if (document.visibilityState === "visible") load();
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
+  }, [load]);
+
+  // The interval skips hidden tabs, so a tab (or installed app) brought back
+  // after hours would show old data for up to ten minutes. Refresh on return
+  // instead — also after a back/forward-cache restore or a lost connection.
+  useEffect(() => {
+    const refreshIfStale = () => {
+      if (
+        !loadingRef.current &&
+        document.visibilityState === "visible" &&
+        Date.now() - fetchedAtRef.current > REFRESH_INTERVAL_MS
+      ) {
+        load();
+      }
+    };
+    // `pageshow` also fires on every ordinary load; only a cache restore counts.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) refreshIfStale();
+    };
+    document.addEventListener("visibilitychange", refreshIfStale);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("online", refreshIfStale);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfStale);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("online", refreshIfStale);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -310,6 +351,7 @@ export default function WeatherDashboard({
                   tz={forecast.timezone}
                   daylight={daylight}
                   theme={theme}
+                  southern={forecast.lat < 0}
                 />
               )}
               {air && <AirQualityCard air={air} />}

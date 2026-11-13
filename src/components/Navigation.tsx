@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Languages } from "lucide-react";
 import { useI18n } from "@/i18n/client";
 import { homePath, pagePath, worldPath } from "@/lib/routes";
+import LanguageLink from "./LanguageLink";
 
 export default function Navigation() {
   const { t, locale } = useI18n();
@@ -21,21 +22,6 @@ export default function Navigation() {
 
   const isActive = (href: string, exact: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-
-  // The page's own hreflang tags know its translation; fall back to the other
-  // homepage. Only their path is used: the tags carry the production origin,
-  // which would send local and preview deployments to the live site. The query
-  // string stays, so the homepage keeps the chosen place. (The two languages
-  // have separate root layouts, so this is a full page load either way.)
-  const switchLanguage = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    const alt = document.querySelector<HTMLLinkElement>(
-      `link[rel="alternate"][hreflang="${other}"]`
-    );
-    if (alt?.href) {
-      event.preventDefault();
-      window.location.assign(new URL(alt.href).pathname + window.location.search);
-    }
-  };
 
   return (
     <nav
@@ -83,18 +69,15 @@ export default function Navigation() {
             </li>
           ))}
           <li>
-            <a
-              href={homePath(other)}
-              hrefLang={other}
-              lang={other}
-              onClick={switchLanguage}
+            <LanguageLink
+              to={other}
               className="ml-1 inline-flex items-center gap-1 rounded-full border border-white/25 px-2.5 py-1.5 text-sm font-medium text-white/85 transition-all hover:bg-white/15 hover:text-white"
               title={t.nav.language}
             >
               <Languages className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">{t.nav.switchTo}</span>
               <span className="sm:hidden">{other.toUpperCase()}</span>
-            </a>
+            </LanguageLink>
           </li>
         </ul>
       </div>

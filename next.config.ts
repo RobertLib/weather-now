@@ -18,7 +18,11 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Origin only, also within the site: the homepage keeps a chosen place
+          // in its query string (`/?lat=…&lon=…&name=…`), which would otherwise
+          // reach the next page's document.referrer (and analytics) on a full
+          // page load such as the language switch.
+          { key: "Referrer-Policy", value: "strict-origin" },
           // Only the location button needs a device API.
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
         ],

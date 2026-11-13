@@ -5,6 +5,7 @@ import { LOCALES, Locale } from "@/i18n/config";
 import { POPULAR } from "@/lib/popular";
 import { placePath } from "@/lib/routes";
 import type { PlaceLabels } from "@/types/weather";
+import type { Dictionary } from "@/i18n";
 
 /**
  * The curated place index: every city that gets its own indexable pages.
@@ -54,7 +55,7 @@ for (const place of PLACES) {
   PLACES_BY_CC.set(place.cc, list);
 }
 
-export const CONTINENT_ORDER = ["EU", "NA", "AS", "SA", "AF", "OC"];
+export const CONTINENT_ORDER: Array<keyof Dictionary["continents"]> = ["EU", "NA", "AS", "SA", "AF", "OC"];
 
 export function getCountry(cc: string): Country | undefined {
   return COUNTRY_BY_CC.get(cc);

@@ -21,6 +21,22 @@ describe("slugify", () => {
   it("splits ligatures and digraphs", () => {
     expect(slugify("ﬁord ǅakovo")).toBe("fiord-dzakovo");
   });
+
+  it("folds letters that decompose into a special letter", () => {
+    expect(slugify("Ǿresund Ǽble Ǣ ǿ ǽ ǣ")).toBe("oresund-aeble-ae-o-ae-ae");
+  });
+
+  it("folds schwa, t with stroke and eng", () => {
+    expect(slugify("Gəncə")).toBe("gence");
+    expect(slugify("ƏŧŦŋŊ")).toBe("ettnn");
+  });
+
+  it("drops apostrophes and the ʻokina without splitting the word", () => {
+    expect(slugify("Oʻahu")).toBe("oahu");
+    expect(slugify("L’Aquila")).toBe("laquila");
+    expect(slugify("Côte d'Azur")).toBe("cote-dazur");
+    expect(slugify("S’-čchuan")).toBe("s-cchuan");
+  });
 });
 
 describe("assignPlaceSlugs", () => {
@@ -75,6 +91,43 @@ describe("assignPlaceSlugs", () => {
     const notes = assignPlaceSlugs(places, new Map([[7, { en: "austin", cs: "austin", cc: "US" }]]));
     expect(notes.some((n) => n.includes("ambiguous"))).toBe(true);
     expect(notes.some((n) => n.includes("#7 (austin) was removed"))).toBe(true);
+  });
+
+  it("matches re-issued namesakes the same way in any order", () => {
+    // Both Portlands were re-issued: "portland-maine" can only be Portland, Maine,
+    // which leaves Portland, Oregon as the one match for "portland".
+    const previous: Array<[number, { en: string; cs: string; cc: string }]> = [
+      [1, { en: "portland", cs: "portland-or", cc: "US" }],
+      [3, { en: "portland-maine", cs: "portland-me", cc: "US" }],
+    ];
+    for (const prev of [previous, [...previous].reverse()]) {
+      for (const reverse of [false, true]) {
+        const places = [place(8, "Portland", "Portland", "Oregon"), place(9, "Portland", "Portland", "Maine")];
+        if (reverse) places.reverse();
+        const notes = assignPlaceSlugs(places, new Map(prev));
+        const slugs = Object.fromEntries(places.map((p) => [p.id, p.slug]));
+        expect(slugs).toEqual({
+          8: { en: "portland", cs: "portland-or" },
+          9: { en: "portland-maine", cs: "portland-me" },
+        });
+        expect(notes.filter((n) => n.includes("is now #"))).toHaveLength(2);
+        expect(notes.some((n) => n.includes("ambiguous") || n.includes("404"))).toBe(false);
+      }
+    }
+  });
+
+  it("gives a contested new place to the vanished slug that names its region", () => {
+    const places = [place(9, "Portland", "Portland", "Maine")];
+    const notes = assignPlaceSlugs(
+      places,
+      new Map([
+        [1, { en: "portland", cs: "portland", cc: "US" }],
+        [3, { en: "portland-maine", cs: "portland-maine", cc: "US" }],
+      ])
+    );
+    expect(places[0].slug).toEqual({ en: "portland-maine", cs: "portland-maine" });
+    expect(notes.some((n) => n.includes("#3 (portland-maine) is now #9"))).toBe(true);
+    expect(notes.some((n) => n.includes("#1 (portland) was removed"))).toBe(true);
   });
 
   it("reports a place whose country changed, since its URLs change too", () => {

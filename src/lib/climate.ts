@@ -28,6 +28,8 @@ interface ClimateFile {
   sourceUrl: string;
   license: string;
   period: string;
+  /** `YYYY-MM-DD` when the normals last changed (written by scripts/build-climate.mjs). */
+  updated?: string;
   sources?: Record<string, string>;
   /** Places whose precipitation comes from another provider than `sources`. */
   precipSources?: Record<string, string>;
@@ -84,6 +86,9 @@ export const CLIMATE_PROVIDERS: ClimateProvider[] = (() => {
 })();
 
 export const CLIMATE_PERIOD = CLIMATE.period;
+
+/** When the climate normals last changed, for sitemap `lastmod`; undefined in older datasets. */
+export const CLIMATE_UPDATED: Date | undefined = CLIMATE.updated ? new Date(CLIMATE.updated) : undefined;
 
 /** Which source the normals of one place come from. */
 export function climateProvider(placeId: number): ClimateProvider {

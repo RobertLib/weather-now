@@ -122,4 +122,19 @@ describe("normalizeForecast", () => {
       [t0 + 2 * DAY + 9 * 3600, t0 + 2 * DAY + 15 * 3600, 6 * 3600],
     ]);
   });
+
+  it("keeps a missing precipitation probability unknown instead of 0 %", () => {
+    // Open-Meteo leaves the last ~1.5 days of hourly probabilities empty.
+    const raw = {
+      latitude: 0,
+      longitude: 0,
+      elevation: 0,
+      timezone: "UTC",
+      current: { time: 0 },
+      hourly: series({ time: [0, 3600, 7200], precipitation_probability: [40, 0, null] }, 3),
+      daily: series({ time: [] }, 0),
+    } as unknown as RawForecast;
+
+    expect(normalizeForecast(raw, 0).hourly.map((h) => h.pop)).toEqual([0.4, 0, null]);
+  });
 });

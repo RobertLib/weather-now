@@ -17,7 +17,7 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assignCountrySlugs, assignPlaceSlugs, slugify } from "./lib/slugs.mjs";
@@ -392,11 +392,34 @@ const CONTINENT = {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let lastRequest = 0;
 
+/**
+ * Writes `data` to a temporary file and renames it into place, so an
+ * interrupted run never leaves a truncated cache entry or dataset behind.
+ */
+async function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await writeFile(tmp, data);
+    await rename(tmp, file);
+  } catch (error) {
+    await rm(tmp, { force: true });
+    throw error;
+  }
+}
+
 /** GET a JSON document, cached on disk by URL; throttled and retried. */
 async function cachedJson(url) {
   const key = createHash("sha1").update(url).digest("hex").slice(0, 20);
   const file = path.join(CACHE_DIR, "open-meteo", `${key}.json`);
-  if (existsSync(file)) return JSON.parse(await readFile(file, "utf8"));
+  if (existsSync(file)) {
+    // An unreadable entry (say, truncated by an older, non-atomic write) is a miss.
+    try {
+      return JSON.parse(await readFile(file, "utf8"));
+    } catch (error) {
+      console.warn(`  ! unreadable cache entry ${file} (${error.message}) – downloading again`);
+      await rm(file, { force: true });
+    }
+  }
 
   for (let attempt = 1; ; attempt++) {
     const wait = lastRequest + MIN_INTERVAL_MS - Date.now();
@@ -418,7 +441,7 @@ async function cachedJson(url) {
         throw new Error(`Unexpected payload for ${url}: ${text.slice(0, 200)}`);
       }
       await mkdir(path.dirname(file), { recursive: true });
-      await writeFile(file, text);
+      await writeAtomic(file, text);
       return data;
     } catch (error) {
       if (error.fatal || attempt >= 6) throw error;
@@ -672,6 +695,7 @@ async function main() {
 
   const places = [];
   const byId = new Map();
+  const usedOverrides = new Set();
   const usedA1Fixes = new Set();
   for (const [index, entry] of entries.entries()) {
     process.stdout.write(`[${index + 1}/${entries.length}] ${entry.en} (${entry.cc})\n`);
@@ -682,7 +706,10 @@ async function main() {
       continue;
     }
     const fix = OVERRIDES[`${place.cc}:${place.en}`];
-    if (fix) Object.assign(place, fix);
+    if (fix) {
+      usedOverrides.add(`${place.cc}:${place.en}`);
+      Object.assign(place, fix);
+    }
     const a1Fix = place.a1 && A1_FIXES[`${place.cc}|${place.a1.en}`];
     if (a1Fix) {
       usedA1Fixes.add(`${place.cc}|${place.a1.en}`);
@@ -692,6 +719,10 @@ async function main() {
     places.push(place);
   }
 
+  // A renamed or skipped entry silently loses its fix (Funchal would go back to 280 m).
+  for (const key of Object.keys(OVERRIDES)) {
+    if (!usedOverrides.has(key)) console.warn(`  ! unused override ${key}`);
+  }
   for (const key of Object.keys(A1_FIXES)) {
     if (!usedA1Fixes.has(key)) console.warn(`  ! unused admin1 fix ${key}`);
   }
@@ -745,11 +776,11 @@ async function main() {
   for (const message of assignCountrySlugs(countries, previous.countries)) note(message);
 
   await mkdir(OUT_DIR, { recursive: true });
-  await writeFile(
+  await writeAtomic(
     path.join(OUT_DIR, "places.json"),
     `[\n${output.map((p) => `  ${JSON.stringify(p)}`).join(",\n")}\n]\n`
   );
-  await writeFile(
+  await writeAtomic(
     path.join(OUT_DIR, "countries.json"),
     `{\n${Object.entries(countries)
       .map(([cc, c]) => `  ${JSON.stringify(cc)}: ${JSON.stringify(c)}`)

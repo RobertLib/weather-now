@@ -26,6 +26,7 @@ import { wearTier } from "@/lib/wear";
 import { AQI_COLORS, POLLEN_COLORS, UNRATED_COLOR, aqiLevel, pollenLevel, pollutantReadings } from "@/lib/air";
 import { midMonthDaylight, moonPhase, nextMoonEvents, localNoonUtc, solstice, sunTimes } from "@/lib/astro";
 import { compassIndex } from "@/lib/units";
+import { badgeStyle } from "@/lib/contrast";
 import { UV_COLORS, uvLevel } from "@/lib/meteo";
 import {
   dayKey,
@@ -209,6 +210,7 @@ function monthProseInput(name: string, months: MonthNormals[], m: number, place:
   const n = months[m];
   const prev = (m + 11) % 12;
   const rank = [...months].map((x, i) => ({ i, hi: x.hi })).sort((a, b) => b.hi - a.hi).findIndex((x) => x.i === m) + 1;
+  const daylight = midMonthDaylight(m, place.lat, place.lon);
   return {
     name,
     month: m,
@@ -220,7 +222,8 @@ function monthProseInput(name: string, months: MonthNormals[], m: number, place:
     sd: n.sd,
     rhi: n.rhi,
     rlo: n.rlo,
-    daylight: formatDuration(midMonthDaylight(m, place.lat, place.lon)),
+    daylight: formatDuration(daylight),
+    polar: daylight <= 0 ? ("night" as const) : daylight >= 1440 ? ("day" as const) : null,
     prevHi: months[prev].hi,
     prevMonth: prev,
     verdict: verdict(monthComfort(n)),
@@ -414,7 +417,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
         h1={t.city.h1.hourly(name)}
         lead={
           hours.length
-            ? t.prose.hourly(name, hours.length, Math.min(...temps), Math.max(...temps), hours.filter((h) => h.pop >= 0.4).length)
+            ? t.prose.hourly(name, hours.length, Math.min(...temps), Math.max(...temps), hours.filter((h) => (h.pop ?? 0) >= 0.4).length)
             : t.city.viewUnavailable
         }
         theme={themeOf(data)}
@@ -499,7 +502,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
                       <li key={d.date} className="glass-soft flex items-center justify-between gap-3 rounded-xl px-3 py-2">
                         <span className="text-sm font-semibold capitalize">{dayLabel(d.time, air.timezone, locale)}</span>
                         {l !== null && (
-                          <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: AQI_COLORS[l] }}>
+                          <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={badgeStyle(AQI_COLORS[l])}>
                             {t.air.levels[l]} · {Math.round(d.europeanAqi!)}
                           </span>
                         )}
@@ -553,7 +556,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
                   {pollen.map((p) => (
                     <li key={p.type} className="glass-soft flex items-center justify-between rounded-xl px-3 py-2 text-sm">
                       <span className="font-medium">{t.air.pollenTypes[p.type]}</span>
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: POLLEN_COLORS[p.level] }}>
+                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={badgeStyle(POLLEN_COLORS[p.level])}>
                         {t.air.pollenLevels[p.level]}
                       </span>
                     </li>
@@ -566,7 +569,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
               <ul className="space-y-1.5 text-sm">
                 {t.air.levels.map((label, i) => (
                   <li key={label} className="flex items-start gap-3">
-                    <span className="mt-0.5 w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-semibold text-white" style={{ backgroundColor: AQI_COLORS[i] }}>
+                    <span className="mt-0.5 w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-semibold" style={badgeStyle(AQI_COLORS[i])}>
                       {["0–20", "20–40", "40–60", "60–80", "80–100", "100+"][i]}
                     </span>
                     <span>
@@ -650,8 +653,8 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
                 <li key={i}>
                   <Link
                     href={placePath(locale, country, place, "climate", i)}
-                    className={`block rounded-xl px-2 py-2 text-center text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 ${f.best.includes(i) ? "ring-2 ring-white/80" : ""}`}
-                    style={{ backgroundColor: color }}
+                    className={`block rounded-xl px-2 py-2 text-center text-xs font-semibold transition-transform hover:-translate-y-0.5 ${f.best.includes(i) ? "ring-2 ring-white/80" : ""}`}
+                    style={badgeStyle(color)}
                   >
                     {t.months[i]}
                   </Link>
@@ -682,7 +685,7 @@ export async function CityPage({ locale, params }: { locale: Locale; params: Cit
             ...(m.pd !== undefined ? [{ label: t.tables.wetDays, value: Math.round(m.pd) }] : []),
             ...(m.sun !== undefined ? [{ label: t.tables.sunHours, value: `${m.sun.toFixed(1)} ${t.tables.perDay}` }] : []),
             ...(m.sd !== undefined ? [{ label: t.tables.snowDays, value: Math.round(m.sd) }] : []),
-            { label: t.views.daylightMid, value: input.daylight },
+            { label: t.views.daylightMid, value: input.polar ? t.views.polar[input.polar] : input.daylight },
             ...(m.rhi !== undefined ? [{ label: t.views.recordHigh, value: <Temp c={m.rhi} /> }] : []),
             ...(m.rlo !== undefined ? [{ label: t.views.recordLow, value: <Temp c={m.rlo} /> }] : []),
           ]}
@@ -779,7 +782,7 @@ function HourTable({
                 </tr>
               );
             }
-            const wet = h.pop >= 0.4;
+            const wet = (h.pop ?? 0) >= 0.4;
             rows.push(
               <tr key={h.time} className={wet ? "bg-sky-400/10" : undefined}>
                 <td className={`${tdClass} font-semibold`}>{formatHour(h.time, tz, locale)}</td>
@@ -795,7 +798,7 @@ function HourTable({
                 <td className={tdClass}>
                   <Temp c={h.feelsLike} />
                 </td>
-                <td className={tdClass}>{Math.round(h.pop * 100)} %</td>
+                <td className={tdClass}>{h.pop === null ? "—" : `${Math.round(h.pop * 100)} %`}</td>
                 <td className={tdClass}>{h.precipitation > 0 ? `${h.precipitation.toFixed(1)} mm` : "—"}</td>
                 <td className={tdClass}>
                   <Speed ms={h.windSpeed} /> {t.highlights.compass[compassIndex(h.windDir)]}
@@ -855,7 +858,7 @@ function DayTable({ t, locale, tz, days }: { t: Dictionary; locale: Locale; tz: 
                 {d.uvMax === null ? (
                   "—"
                 ) : (
-                  <span className="rounded px-1.5 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: UV_COLORS[uvLevel(d.uvMax)] }}>
+                  <span className="rounded px-1.5 py-0.5 text-xs font-bold" style={badgeStyle(UV_COLORS[uvLevel(d.uvMax)])}>
                     {Math.round(d.uvMax)}
                   </span>
                 )}
@@ -872,11 +875,11 @@ function ChartLegend({ t }: { t: Dictionary }) {
   return (
     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1 text-[0.7rem] text-slate-500 dark:text-slate-400">
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-[3px] w-5 rounded-full bg-orange-500" />
+        <span className="h-0.75 w-5 rounded-full bg-orange-500" />
         {t.tables.avgHigh}
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-[3px] w-5 rounded-full bg-blue-500" />
+        <span className="h-0.75 w-5 rounded-full bg-blue-500" />
         {t.tables.avgLow}
       </span>
       <span className="inline-flex items-center gap-1.5">

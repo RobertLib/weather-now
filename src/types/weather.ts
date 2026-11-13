@@ -26,7 +26,8 @@ export interface HourlyPoint {
   temp: number;
   feelsLike: number;
   humidity: number;
-  pop: number;
+  /** Null where the model gives no probability (the last day or so of the range). */
+  pop: number | null;
   precipitation: number;
   code: number;
   clouds: number;
